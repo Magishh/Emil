@@ -235,7 +235,11 @@ export function CampaignSetupWizard({
         }),
       });
 
-      if (res.ok) {
+      if (!res.ok) {
+        throw new Error(`Synthesis endpoint returned ${res.status}`);
+      }
+
+      {
         const data = await res.json();
         if (data.enhancedPremise || data.expandedPremise) {
           setStoryPremise(data.enhancedPremise || data.expandedPremise || promptToUse);
@@ -270,10 +274,40 @@ export function CampaignSetupWizard({
         }
       }
     } catch (err) {
+      // No backend reachable (for example the static GitHub Pages build, which
+      // has no Express server). Synthesize locally from the bundled presets so
+      // the button still produces a campaign instead of appearing broken.
       console.warn('Synthesis fallback:', err);
+      applyLocalSynthesis(promptToUse);
       setIsSynthesized(true);
+      soundEngine.playVictory();
     } finally {
       setIsEnhancingPrompt(false);
+    }
+  };
+
+  // Offline synthesis: derive the campaign framing, heroes and relics from the
+  // premise using the bundled generators.
+  const applyLocalSynthesis = (premise: string) => {
+    const concepts = getStoryHeroConceptsForPremise(premise);
+    const relics = getThematicItemsForPremise(premise);
+
+    setCampaignTitle(
+      premise.length < 40 ? premise : `${premise.slice(0, 37).trim()}...`
+    );
+    setWorldTheme(promptTone);
+    setEnvironmentLore(
+      'A treacherous landscape fraught with ancient perils, shifting hazards and long-buried secrets.'
+    );
+    setQuestObjective('Uncover the truth buried at the heart of this place.');
+    setOpeningLocation('The Gateway Antechamber');
+
+    if (concepts.length > 0) {
+      setBespokeHeroes(concepts);
+      handleApplyHeroConcept(concepts[0]);
+    }
+    if (relics.length > 0) {
+      setSelectedItems(relics.slice(0, 4));
     }
   };
 
@@ -302,22 +336,27 @@ export function CampaignSetupWizard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ premise: storyPremise, theme: worldTheme }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const heroes = data.bespokeHeroes || data.heroes;
-        if (Array.isArray(heroes) && heroes.length > 0) {
-          setBespokeHeroes(heroes);
-          handleApplyHeroConcept(heroes[0]);
-          setIsSynthesized(true);
-          soundEngine.playVictory();
-        }
-        const items = data.thematicItems || data.items;
-        if (Array.isArray(items) && items.length > 0) {
-          setSelectedItems(items.slice(0, 3));
-        }
+      if (!res.ok) {
+        throw new Error(`Hero generator returned ${res.status}`);
+      }
+
+      const data = await res.json();
+      const heroes = data.bespokeHeroes || data.heroes;
+      if (Array.isArray(heroes) && heroes.length > 0) {
+        setBespokeHeroes(heroes);
+        handleApplyHeroConcept(heroes[0]);
+        setIsSynthesized(true);
+        soundEngine.playVictory();
+      }
+      const items = data.thematicItems || data.items;
+      if (Array.isArray(items) && items.length > 0) {
+        setSelectedItems(items.slice(0, 3));
       }
     } catch (err) {
+      // Fall back to the bundled story generators when no backend is reachable.
       console.warn('Generate bespoke heroes error:', err);
+      applyLocalSynthesis(storyPremise);
+      soundEngine.playVictory();
     } finally {
       setIsGeneratingBespokeHeroes(false);
     }
