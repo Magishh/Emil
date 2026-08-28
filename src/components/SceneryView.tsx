@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LocationInfo } from '../types';
 import { generateScenerySvg } from '../utils/svgArt';
 import { Sparkles, RefreshCw, Maximize2, ShieldAlert, Compass, Eye } from 'lucide-react';
@@ -20,6 +20,12 @@ export const SceneryView: React.FC<SceneryViewProps> = ({
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [imgError, setImgError] = useState(false);
+
+  // Reset the image error flag whenever a new scenery image arrives, otherwise
+  // one failed load permanently pins the view to the fallback SVG.
+  useEffect(() => {
+    setImgError(false);
+  }, [location.sceneryImageUrl]);
 
   const fallbackSvg = generateScenerySvg(location.sceneryPrompt || location.atmosphere, location.name);
   const displayImage = (!imgError && location.sceneryImageUrl) ? location.sceneryImageUrl : fallbackSvg;

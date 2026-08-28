@@ -389,7 +389,9 @@ export function getStoredCustomRaces(): CustomRace[] {
     const raw = localStorage.getItem(CUSTOM_RACES_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      // An empty stored array is a real state (the player deleted every race),
+      // not missing data - reseeding the defaults here would resurrect them.
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.warn('Error reading custom races from localStorage:', e);
@@ -426,7 +428,9 @@ export function getStoredCustomClasses(): CustomClass[] {
     const raw = localStorage.getItem(CUSTOM_CLASSES_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      // An empty stored array is a real state (the player deleted every class),
+      // not missing data - reseeding the defaults here would resurrect them.
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.warn('Error reading custom classes from localStorage:', e);

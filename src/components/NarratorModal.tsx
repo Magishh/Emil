@@ -92,25 +92,32 @@ export const NarratorModal: React.FC<NarratorModalProps> = ({
     };
 
     updateVoices();
-    window.speechSynthesis.onvoiceschanged = updateVoices;
+    window.speechSynthesis.addEventListener('voiceschanged', updateVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', updateVoices);
+    };
   }, []);
 
   if (!isOpen) return null;
 
+  // Applies a partial update in one pass. Two back-to-back single-key updates
+  // both derive from the same `settings` snapshot, so the second silently
+  // discards the first (selecting a voice would drop the engine switch).
+  const handleUpdateSettings = (partial: Partial<NarratorSettings>) => {
+    setSettings((prev) => ({ ...prev, ...partial }));
+    narratorEngine.updateSettings(partial);
+  };
+
   const handleUpdateSetting = <K extends keyof NarratorSettings>(key: K, value: NarratorSettings[K]) => {
-    const next = { ...settings, [key]: value };
-    setSettings(next);
-    narratorEngine.updateSettings({ [key]: value });
+    handleUpdateSettings({ [key]: value } as Partial<NarratorSettings>);
   };
 
   const handleSelectGeminiVoice = (voiceId: GeminiVoiceName) => {
-    handleUpdateSetting('engine', 'gemini');
-    handleUpdateSetting('geminiVoice', voiceId);
+    handleUpdateSettings({ engine: 'gemini', geminiVoice: voiceId });
   };
 
   const handleSelectBrowserVoice = (uri: string) => {
-    handleUpdateSetting('engine', 'browser');
-    handleUpdateSetting('browserVoiceURI', uri);
+    handleUpdateSettings({ engine: 'browser', browserVoiceURI: uri });
   };
 
   const handlePreviewVoice = async (voiceId: GeminiVoiceName | string, engine: 'gemini' | 'browser') => {

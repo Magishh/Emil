@@ -197,15 +197,30 @@ export function sanitizeCampaignState(raw: any): CampaignState {
       wis: typeof charStats.wis === 'number' ? charStats.wis : 12,
       cha: typeof charStats.cha === 'number' ? charStats.cha : 10,
     },
-    inventory: (Array.isArray(char.inventory) ? char.inventory : (fallbackHero.inventory || [])).map((item: any) => ({
-      ...item,
-      imageUrl: (item.imageUrl && typeof item.imageUrl === 'string' && !item.imageUrl.startsWith('data:image/svg+xml;base64,PHN2Zw'))
-        ? item.imageUrl
-        : getFixedPerchanceItemImageUrl(item),
-    })),
+    inventory: (Array.isArray(char.inventory) ? char.inventory : (fallbackHero.inventory || []))
+      .filter((item: any) => item && typeof item === 'object')
+      .map((item: any, idx: number) => ({
+        ...item,
+        // A missing or non-positive quantity makes stack maths (and the "use
+        // one, drop when empty" flow) produce NaN or vanish the item.
+        id: item.id || `item-restored-${idx}`,
+        quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
+        imageUrl: (item.imageUrl && typeof item.imageUrl === 'string' && !item.imageUrl.startsWith('data:image/svg+xml;base64,PHN2Zw'))
+          ? item.imageUrl
+          : getFixedPerchanceItemImageUrl(item),
+      })),
     statusEffects: Array.isArray(char.statusEffects) ? char.statusEffects : (fallbackHero.statusEffects || []),
     spellSlots: char.spellSlots || fallbackHero.spellSlots,
   };
+
+  // Enforce the invariants the type alone cannot express: a positive maxHp and
+  // an hp that sits inside [0, maxHp]. A save written mid-edit (or by an older
+  // build) can otherwise drive NaN health bars.
+  sanitizedCharacter.maxHp = Math.max(1, Math.round(sanitizedCharacter.maxHp) || 1);
+  sanitizedCharacter.hp = Math.max(
+    0,
+    Math.min(sanitizedCharacter.maxHp, Math.round(sanitizedCharacter.hp) || 0)
+  );
 
   const loc = raw?.currentLocation || {};
   const sanitizedLocation = {
@@ -261,7 +276,10 @@ export function getSavedCampaigns(): CampaignState[] {
     const raw = localStorage.getItem(STORAGE_LIST_KEY);
     if (raw) {
       const parsed: any[] = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      // An empty stored list is a real state (the player deleted every
+      // campaign), not missing data - falling through here would re-seed the
+      // starter campaigns and resurrect what they just deleted.
+      if (Array.isArray(parsed)) {
         return parsed.map(sanitizeCampaignState);
       }
     }

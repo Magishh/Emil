@@ -127,19 +127,21 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     }
   };
 
-  // HP Math
-  const hpPercent = Math.max(0, Math.min(100, (character.hp / character.maxHp) * 100));
+  // HP Math (guard against a zero maxHp, which would render a NaN width)
+  const safeMaxHp = Math.max(1, character.maxHp || 0);
+  const hpPercent = Math.max(0, Math.min(100, (character.hp / safeMaxHp) * 100));
 
   const handleAdjustHp = (amount: number) => {
-    onUpdateCharacter((prev) => {
-      const newHp = Math.max(0, Math.min(prev.maxHp, prev.hp + amount));
-      if (amount > 0) {
-        soundEngine.playHeal();
-      } else {
-        soundEngine.playSwordStrike();
-      }
-      return { ...prev, hp: newHp };
-    });
+    // Sound belongs outside the updater: React may invoke it more than once.
+    if (amount > 0) {
+      soundEngine.playHeal();
+    } else {
+      soundEngine.playSwordStrike();
+    }
+    onUpdateCharacter((prev) => ({
+      ...prev,
+      hp: Math.max(0, Math.min(prev.maxHp, prev.hp + amount)),
+    }));
   };
 
   const handleAddPresetCondition = (preset: typeof PRESET_CONDITIONS[0]) => {
@@ -232,8 +234,10 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
     if (item.type === 'potion' || item.type === 'scroll') {
       // Consume potion/scroll and heal or trigger magical effect
       soundEngine.playHeal();
+      // 2d4+4 (6 to 12), matching the healing potion text.
+      const healAmount =
+        Math.floor(Math.random() * 4) + 1 + Math.floor(Math.random() * 4) + 1 + 4;
       onUpdateCharacter((prev) => {
-        const healAmount = Math.floor(Math.random() * 8) + 6; // ~2d4+4
         const newHp = Math.min(prev.maxHp, prev.hp + healAmount);
         const newInv = prev.inventory
           .map((i) => {

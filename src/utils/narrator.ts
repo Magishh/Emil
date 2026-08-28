@@ -128,6 +128,7 @@ class NarratorEngine {
   private settings: NarratorSettings = { ...DEFAULT_NARRATOR_SETTINGS };
   private listeners: Set<(state: NarratorPlaybackState) => void> = new Set();
   private audioCache: Map<string, string> = new Map(); // hash -> blobUrl
+  private static readonly MAX_CACHED_CLIPS = 12;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private browserSpeechTimer: any = null;
 
@@ -173,8 +174,16 @@ class NarratorEngine {
 
     this.state.rate = this.settings.rate;
     this.state.engine = this.settings.engine;
-    this.state.voiceName = this.settings.geminiVoice;
+    this.state.voiceName = this.resolveVoiceName();
     this.notify();
+  }
+
+  // The displayed voice name must follow the selected engine; always reporting
+  // the Gemini voice mislabels browser playback.
+  private resolveVoiceName(): string {
+    return this.settings.engine === 'gemini'
+      ? this.settings.geminiVoice
+      : (this.settings.browserVoiceURI || 'System Voice');
   }
 
   public subscribe(fn: (state: NarratorPlaybackState) => void): () => void {
@@ -209,7 +218,7 @@ class NarratorEngine {
     }
     this.state.rate = this.settings.rate;
     this.state.engine = this.settings.engine;
-    this.state.voiceName = this.settings.geminiVoice;
+    this.state.voiceName = this.resolveVoiceName();
   }
 
   private saveSettings() {
@@ -304,6 +313,7 @@ class NarratorEngine {
       const wavBlob = pcmBase64ToWavBlob(data.audioBase64, 24000);
       blobUrl = URL.createObjectURL(wavBlob);
       this.audioCache.set(cacheKey, blobUrl);
+      this.evictOldestCachedClips();
     }
 
     // Initialize Audio Element
@@ -349,11 +359,30 @@ class NarratorEngine {
       this.state.isLoading = false;
       this.state.isPlaying = true;
       this.state.isPaused = false;
+      this.state.engine = 'gemini';
       this.notify();
     } catch (err: any) {
       // User gesture needed or playback failed
       this.state.isLoading = false;
       throw err;
+    }
+  }
+
+  // Blob URLs stay alive until explicitly revoked, so bound the cache and
+  // release the clips that fall out of it.
+  private evictOldestCachedClips() {
+    while (this.audioCache.size > NarratorEngine.MAX_CACHED_CLIPS) {
+      const oldestKey = this.audioCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      const staleUrl = this.audioCache.get(oldestKey);
+      this.audioCache.delete(oldestKey);
+      if (staleUrl && staleUrl !== this.audioElement?.src) {
+        try {
+          URL.revokeObjectURL(staleUrl);
+        } catch {
+          // Ignore
+        }
+      }
     }
   }
 
@@ -391,6 +420,13 @@ class NarratorEngine {
       );
       if (preferred) utterance.voice = preferred;
     }
+
+    // Record that speech is now running on the browser engine. Without this a
+    // Gemini-to-browser fallback leaves state.engine as 'gemini', so pause(),
+    // resume() and stop() go on to drive the idle <audio> element while the
+    // Web Speech utterance keeps talking.
+    this.state.engine = 'browser';
+    this.state.voiceName = utterance.voice?.name || settings.browserVoiceURI || 'System Voice';
 
     // Estimate duration for progress bar
     const estimatedDuration = Math.max(2, (text.split(' ').length / (140 * settings.rate)) * 60);

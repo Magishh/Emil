@@ -36,6 +36,14 @@ interface WizardStep2RacesClassesProps {
   worldTheme: string;
 }
 
+// Custom classes store the hit die either as a number (forge modal) or as a
+// string like "d8" (built-in presets and AI drafts). Render one consistent label.
+function formatHitDie(hitDie: CustomClass['hitDie'] | undefined): string {
+  if (hitDie === undefined || hitDie === null) return 'd?';
+  const raw = String(hitDie);
+  return raw.toLowerCase().startsWith('d') ? raw.toLowerCase() : `d${raw}`;
+}
+
 export function WizardStep2RacesClasses({
   selectedRace,
   onSelectRace,
@@ -219,7 +227,7 @@ export function WizardStep2RacesClasses({
                         <p className="text-[11px] text-slate-300 italic mt-0.5 line-clamp-2">{cr.lore}</p>
                         
                         <div className="mt-2 text-[10px] space-y-0.5">
-                          <div className="text-amber-300 font-mono font-semibold">{cr.racialTraits}</div>
+                          <div className="text-amber-300 font-mono font-semibold">{cr.racialTraits || cr.traits}</div>
                           {cr.specialAbility && (
                             <div className="text-slate-400 truncate">★ {cr.specialAbility}</div>
                           )}
@@ -369,7 +377,7 @@ export function WizardStep2RacesClasses({
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                            d{cc.hitDie} • {cc.primaryAbility}
+                            {formatHitDie(cc.hitDie)} • {cc.primaryAbility || cc.primary || '—'}
                           </span>
                           <div className="flex items-center gap-1">
                             {isSelected && (
@@ -396,12 +404,12 @@ export function WizardStep2RacesClasses({
                         
                         <div className="mt-2 text-[10px] space-y-0.5">
                           <div className="text-emerald-400 font-mono font-semibold">
-                            HP: {cc.baseHp} • AC: {cc.baseAc}
+                            HP: {cc.baseHp ?? cc.hp ?? '—'} • AC: {cc.baseAc ?? cc.ac ?? '—'}
                           </div>
                           {cc.specialAbility && (
                             <div className="text-amber-300 truncate">★ {cc.specialAbility}</div>
                           )}
-                          <div className="text-slate-400 truncate">Gear: {cc.startingEquipment?.join(', ')}</div>
+                          <div className="text-slate-400 truncate">Gear: {(cc.startingEquipment || cc.defaultItems || []).join(', ')}</div>
                         </div>
                       </div>
                     </div>

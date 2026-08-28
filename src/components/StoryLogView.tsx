@@ -76,6 +76,12 @@ export const StoryLogView: React.FC<StoryLogViewProps> = ({
     Extreme: 'bg-red-950/90 text-red-100 border-red-700 animate-pulse',
   };
 
+  // Reset the image error flag whenever a new scenery image arrives, otherwise
+  // one failed load permanently pins the view to the fallback SVG.
+  useEffect(() => {
+    setImgError(false);
+  }, [location.sceneryImageUrl]);
+
   // Subscribe to Narrator playback updates
   useEffect(() => {
     const unsub = narratorEngine.subscribe((state) => {

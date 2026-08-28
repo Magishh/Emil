@@ -749,15 +749,17 @@ app.post("/api/perchance/generate", async (req, res) => {
     }
   }
 
+  // Resolve the seed up front so the seed we report back is the seed actually used.
+  const dynamicSeed = seed || Math.floor(Math.random() * 90000000) + 10000000;
+
   // Now call Perchance AI API with the detailed prompt
   const perchanceResult = await fetchPerchanceAiImage(finalDetailedPrompt, {
     aspectRatio,
     stylePreset,
     negativePrompt,
-    seed,
+    seed: dynamicSeed,
   });
 
-  const dynamicSeed = seed || Math.floor(Math.random() * 90000000) + 10000000;
   let resolution = "square";
   if (aspectRatio === "16:9" || aspectRatio === "4:3") resolution = "landscape";
   else if (aspectRatio === "3:4" || aspectRatio === "9:16") resolution = "portrait";
@@ -906,15 +908,18 @@ app.post("/api/generate-image", async (req, res) => {
     aspectRatio = "1:1",
     imageSize = "1K",
     stylePreset = "cinematic-fantasy",
-    modelChoice = "perchance",
+    modelChoice: rawModelChoice = "perchance",
     characterName,
     className,
     race,
-  } = req.body;
+  } = req.body || {};
 
-  if (!prompt) {
+  if (!prompt || typeof prompt !== "string") {
     return res.status(400).json({ error: "Prompt is required." });
   }
+
+  // Guard against a non-string modelChoice reaching .startsWith()/.includes().
+  const modelChoice = String(rawModelChoice ?? "perchance");
 
   // Style prefixes tailored for fantasy character portraits and scenic visuals
   const styleModifiers: Record<string, string> = {
@@ -1064,15 +1069,18 @@ app.post("/api/edit-image", async (req, res) => {
     imageBase64,
     editPrompt,
     aspectRatio = "1:1",
-    modelChoice = "perchance",
+    modelChoice: rawModelChoice = "perchance",
     characterName,
     className,
     race,
-  } = req.body;
+  } = req.body || {};
 
-  if (!editPrompt) {
+  if (!editPrompt || typeof editPrompt !== "string") {
     return res.status(400).json({ error: "editPrompt is required." });
   }
+
+  // Guard against a non-string modelChoice reaching .startsWith().
+  const modelChoice = String(rawModelChoice ?? "perchance");
 
   // 1. Try Gemini Image-to-Image editing if Gemini client is active
   const ai = getGeminiClient();
@@ -1085,8 +1093,11 @@ app.post("/api/edit-image", async (req, res) => {
       cleanData = split[1];
     }
 
+    // Only forward modelChoice as a model id when it actually names a Gemini
+    // model; aliases like "nano-banana-2" are not valid model ids and would
+    // burn an attempt on a guaranteed error.
     const modelsToTry = [
-      modelChoice || "gemini-3.1-flash-image",
+      modelChoice.startsWith("gemini") ? modelChoice : "gemini-3.1-flash-image",
       "gemini-3.1-flash-lite-image",
     ];
 
@@ -1519,8 +1530,38 @@ Preferred Type: ${type || 'auto-detect'}`;
 
 // AI Custom Race & Class Synthesizer Endpoint
 app.post("/api/generate-custom-race-or-class", async (req, res) => {
-  const { targetType = "race", prompt = "", storyTheme = "Fantasy Adventure" } = req.body || {};
+  const body = req.body || {};
+  // Accept both the documented field names and the aliases the client sends
+  // ("mode", "worldTheme"/"premise") so a class request is never silently
+  // handled as a race request.
+  const rawTarget = body.targetType ?? body.mode ?? "race";
+  const targetType = String(rawTarget).toLowerCase() === "class" ? "class" : "race";
+  const prompt = body.prompt ?? body.concept ?? body.premise ?? "";
+  const storyTheme =
+    (typeof body.storyTheme === "string" && body.storyTheme.trim()) ? body.storyTheme.trim() :
+    (typeof body.worldTheme === "string" && body.worldTheme.trim()) ? body.worldTheme.trim() :
+    "Fantasy Adventure";
   const cleanConcept = (typeof prompt === "string" && prompt.trim()) ? prompt.trim() : `A unique and inspiring ${targetType} for a ${storyTheme} adventure.`;
+
+  // The client forms use `racialTraits` / `baseHp` / `baseAc` / `primaryAbility`,
+  // while the model schema produces `traits` / `hp` / `ac` / `primary`.
+  // Emit both spellings so either consumer reads a populated value.
+  const withRaceAliases = (race: any) => ({
+    ...race,
+    traits: race.traits ?? race.racialTraits,
+    racialTraits: race.racialTraits ?? race.traits,
+  });
+  const withClassAliases = (cls: any) => ({
+    ...cls,
+    primary: cls.primary ?? cls.primaryAbility,
+    primaryAbility: cls.primaryAbility ?? cls.primary,
+    hp: cls.hp ?? cls.baseHp,
+    baseHp: cls.baseHp ?? cls.hp,
+    ac: cls.ac ?? cls.baseAc,
+    baseAc: cls.baseAc ?? cls.ac,
+    startingEquipment: cls.startingEquipment ?? cls.defaultItems,
+    defaultItems: cls.defaultItems ?? cls.startingEquipment,
+  });
 
   try {
     const ai = getGeminiClient();
@@ -1564,11 +1605,11 @@ Include name, evocative lore/origins, racial traits, stat bonuses (e.g. { str: 2
         if (rawJson) {
           const parsed = JSON.parse(rawJson);
           return res.json({
-            race: {
+            race: withRaceAliases({
               id: `custom-race-${Date.now()}`,
               ...parsed,
               isCustom: true,
-            },
+            }),
           });
         }
       } else {
@@ -1613,11 +1654,11 @@ Include name, hitDie ('d6', 'd8', 'd10', or 'd12'), primary abilities (e.g. 'STR
         if (rawJson) {
           const parsed = JSON.parse(rawJson);
           return res.json({
-            customClass: {
+            customClass: withClassAliases({
               id: `custom-class-${Date.now()}`,
               ...parsed,
               isCustom: true,
-            },
+            }),
           });
         }
       }
@@ -1629,7 +1670,7 @@ Include name, hitDie ('d6', 'd8', 'd10', or 'd12'), primary abilities (e.g. 'STR
   // Fallback
   if (targetType === "race") {
     return res.json({
-      race: {
+      race: withRaceAliases({
         id: `custom-race-${Date.now()}`,
         name: cleanConcept.slice(0, 24) || "Astral Wanderer",
         lore: `A resilient race forged in the mystical boundaries of ${storyTheme}.`,
@@ -1639,11 +1680,11 @@ Include name, hitDie ('d6', 'd8', 'd10', or 'd12'), primary abilities (e.g. 'STR
         senses: "Darkvision 60ft",
         specialAbility: "Adaptive Reflex: Gain advantage on one dexterity save per encounter.",
         isCustom: true,
-      },
+      }),
     });
   } else {
     return res.json({
-      customClass: {
+      customClass: withClassAliases({
         id: `custom-class-${Date.now()}`,
         name: cleanConcept.slice(0, 24) || "Arcane Vanguard",
         hitDie: "d10",
@@ -1655,7 +1696,7 @@ Include name, hitDie ('d6', 'd8', 'd10', or 'd12'), primary abilities (e.g. 'STR
         ac: 16,
         specialAbility: "Arcane Strike: Infuse weapon with +1d6 force damage.",
         isCustom: true,
-      },
+      }),
     });
   }
 });
@@ -1950,135 +1991,6 @@ Your job is to ENHANCE the story prompt and SYNTHESIZE the entire campaign setti
 app.post("/api/enhance-prompt-and-synthesize-campaign", handleEnhanceStoryPrompt);
 app.post("/api/enhance-story-prompt", handleEnhanceStoryPrompt);
 
-// Endpoint for generating story-tailored heroes and relics
-app.post("/api/generate-story-heroes-and-items", async (req, res) => {
-  const { premise, theme } = req.body;
-  const cleanPremise = (premise && typeof premise === "string") ? premise.trim() : "A daring dungeon exploration.";
-  const cleanTheme = (theme && typeof theme === "string") ? theme.trim() : "High Fantasy";
-
-  try {
-    const ai = getGeminiClient();
-    if (ai) {
-      const systemInstruction = `You are a master tabletop RPG character designer. Generate 3 unique D&D 5e hero concepts and 3 starting relics uniquely tailored to survive this story premise: "${cleanPremise}" (Theme: ${cleanTheme}).`;
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          heroes: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                name: { type: Type.STRING },
-                title: { type: Type.STRING },
-                race: { type: Type.STRING },
-                gender: { type: Type.STRING },
-                className: { type: Type.STRING },
-                background: { type: Type.STRING },
-                alignment: { type: Type.STRING },
-                storyMotivation: { type: Type.STRING },
-                customTrait: { type: Type.STRING },
-                stats: {
-                  type: Type.OBJECT,
-                  properties: {
-                    str: { type: Type.INTEGER },
-                    dex: { type: Type.INTEGER },
-                    con: { type: Type.INTEGER },
-                    int: { type: Type.INTEGER },
-                    wis: { type: Type.INTEGER },
-                    cha: { type: Type.INTEGER },
-                  },
-                  required: ["str", "dex", "con", "int", "wis", "cha"],
-                },
-                hp: { type: Type.INTEGER },
-                ac: { type: Type.INTEGER },
-                portraitPrompt: { type: Type.STRING },
-                items: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      name: { type: Type.STRING },
-                      type: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                      damage: { type: Type.STRING },
-                      acBonus: { type: Type.INTEGER },
-                      bonus: { type: Type.STRING },
-                      quantity: { type: Type.INTEGER },
-                      valueGold: { type: Type.INTEGER },
-                    },
-                    required: ["id", "name", "type", "description", "quantity"],
-                  },
-                },
-              },
-              required: ["id", "name", "title", "race", "gender", "className", "background", "alignment", "storyMotivation", "stats", "hp", "ac", "portraitPrompt", "items"],
-            },
-          },
-          thematicItems: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                name: { type: Type.STRING },
-                type: { type: Type.STRING },
-                description: { type: Type.STRING },
-                damage: { type: Type.STRING },
-                acBonus: { type: Type.INTEGER },
-                bonus: { type: Type.STRING },
-                quantity: { type: Type.INTEGER },
-                valueGold: { type: Type.INTEGER },
-              },
-              required: ["id", "name", "type", "description", "quantity"],
-            },
-          },
-        },
-        required: ["heroes", "thematicItems"],
-      };
-
-      const rawJson = await generateGeminiJsonWithFallback(
-        ai,
-        `Generate 3 tailored heroes and 3 thematic relics for: "${cleanPremise}"`,
-        systemInstruction,
-        responseSchema
-      );
-
-      if (rawJson) {
-        const parsed = JSON.parse(rawJson);
-        const heroes = (parsed.heroes || []).map((hero: any) => ({
-          ...hero,
-          items: (hero.items || []).map((item: any) => ({
-            ...item,
-            imageUrl: generateProceduralItemSvg(item),
-          })),
-        }));
-        const thematicItems = (parsed.thematicItems || []).map((item: any) => ({
-          ...item,
-          imageUrl: generateProceduralItemSvg(item),
-        }));
-
-        return res.json({
-          heroes,
-          bespokeHeroes: heroes,
-          thematicItems,
-          items: thematicItems,
-        });
-      }
-    }
-  } catch (err) {
-    console.warn("Error generating story heroes:", err);
-  }
-
-  // Fallback
-  return res.json({
-    heroes: [],
-    bespokeHeroes: [],
-    thematicItems: [],
-    items: [],
-  });
-});
-
 // Story Premise Expander Endpoint (Enriches player premise into rich world setting lore)
 app.post("/api/expand-story-premise", async (req, res) => {
   const { premise } = req.body;
@@ -2144,12 +2056,12 @@ Include:
 // Story Bespoke Heroes & Items Generator Endpoint
 // Generates 3-4 custom, creative, non-generic hero concepts + 4-6 story relics tailored directly to the story premise
 app.post("/api/generate-story-heroes-and-items", async (req, res) => {
-  const { premise, theme } = req.body;
-  if (!premise || typeof premise !== "string") {
-    return res.status(400).json({ error: "Story premise is required" });
-  }
-
-  const cleanPremise = premise.trim();
+  const { premise, theme } = req.body || {};
+  // Fall back to a generic premise rather than rejecting, so the setup wizard
+  // can still populate hero concepts before the player has written a premise.
+  const cleanPremise = (premise && typeof premise === "string" && premise.trim())
+    ? premise.trim()
+    : "A daring dungeon exploration into forgotten ruins.";
   const storyTheme = (theme && typeof theme === "string" ? theme.trim() : "Fantasy Adventure");
 
   try {
@@ -2281,7 +2193,11 @@ Requirements for the 4-6 Story Thematic Items:
             })),
           }));
         }
-        return res.json(parsed);
+        return res.json({
+          ...parsed,
+          bespokeHeroes: parsed.heroes || [],
+          items: parsed.thematicItems || [],
+        });
       }
     }
   } catch (err) {
@@ -2290,7 +2206,9 @@ Requirements for the 4-6 Story Thematic Items:
 
   return res.json({
     heroes: [],
+    bespokeHeroes: [],
     thematicItems: [],
+    items: [],
     fallback: true,
   });
 });

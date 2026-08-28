@@ -29,12 +29,15 @@ export const CharacterModal: React.FC<CharacterModalProps> = ({
     'cinematic-fantasy' | 'dark-gothic' | 'heroic-anime' | 'vintage-dnd' | 'oil-masterpiece'
   >('cinematic-fantasy');
 
-  // Keep customChar in sync when modal opens or currentCharacter updates
+  // Seed the editable copy when the modal opens. Reacting to currentCharacter
+  // as well would wipe in-progress edits every time the live character changed
+  // underneath (an HP tick, a status effect, a regenerated portrait).
   useEffect(() => {
     if (isOpen) {
       setCustomChar({ ...currentCharacter });
     }
-  }, [isOpen, currentCharacter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

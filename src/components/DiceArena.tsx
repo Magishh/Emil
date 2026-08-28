@@ -183,6 +183,12 @@ export const DiceArena: React.FC<DiceArenaProps> = ({
 
         setCurrentResult(newRoll);
         setRollHistory((prev) => [newRoll, ...prev.slice(0, 7)]);
+
+        // The parent stores this roll back into `activeRoll`, which would
+        // otherwise re-trigger the sync effect below and replay the whole
+        // tumble, sound and confetti a second time. Claim it as processed
+        // before handing it up.
+        lastProcessedRollId.current = newRoll.id;
         onExecuteRoll(newRoll);
 
         setTimeout(() => setShowShockwave(false), 900);
@@ -205,57 +211,74 @@ export const DiceArena: React.FC<DiceArenaProps> = ({
 
   // Sync with incoming activeRoll from parent (e.g. choice check, stat check, quick roll)
   useEffect(() => {
-    if (activeRoll && activeRoll.id !== lastProcessedRollId.current) {
-      lastProcessedRollId.current = activeRoll.id;
-      setSelectedDie(activeRoll.dieType);
-      
-      // Run the tumbling animation to reveal this roll smoothly
-      const sides = availableDice.find((d) => d.type === activeRoll.dieType)?.sides || 20;
-      setIsRolling(true);
-      setShowShockwave(false);
-      soundEngine.playDiceRoll();
+    if (!activeRoll || activeRoll.id === lastProcessedRollId.current) return;
 
-      let elapsed = 0;
-      const intervalTime = 40;
-      const totalDuration = 600;
+    lastProcessedRollId.current = activeRoll.id;
+    setSelectedDie(activeRoll.dieType);
 
-      if (animationRef.current) clearInterval(animationRef.current);
+    // Run the tumbling animation to reveal this roll smoothly
+    const sides = availableDice.find((d) => d.type === activeRoll.dieType)?.sides || 20;
+    setIsRolling(true);
+    setShowShockwave(false);
+    soundEngine.playDiceRoll();
 
-      animationRef.current = setInterval(() => {
-        elapsed += intervalTime;
-        const rand = Math.floor(Math.random() * sides) + 1;
-        setDisplayedNumber(rand);
+    let elapsed = 0;
+    let settled = false;
+    const intervalTime = 40;
+    const totalDuration = 600;
 
-        if (elapsed >= totalDuration) {
-          if (animationRef.current) clearInterval(animationRef.current);
-          setDisplayedNumber(activeRoll.baseRoll);
-          setIsRolling(false);
-          setShowShockwave(true);
-          setCurrentResult(activeRoll);
-          setRollHistory((prev) => {
-            if (prev.some((r) => r.id === activeRoll.id)) return prev;
-            return [activeRoll, ...prev.slice(0, 7)];
-          });
+    if (animationRef.current) clearInterval(animationRef.current);
 
-          if (activeRoll.isCritical) {
-            soundEngine.playCriticalSuccess();
-            try {
-              confetti({
-                particleCount: 80,
-                spread: 70,
-                origin: { y: 0.65, x: 0.5 },
-              });
-            } catch {
-              // ignore
-            }
-          } else if (activeRoll.isFumble) {
-            soundEngine.playCriticalFumble();
+    const timer = setInterval(() => {
+      elapsed += intervalTime;
+      const rand = Math.floor(Math.random() * sides) + 1;
+      setDisplayedNumber(rand);
+
+      if (elapsed >= totalDuration) {
+        settled = true;
+        clearInterval(timer);
+        setDisplayedNumber(activeRoll.baseRoll);
+        setIsRolling(false);
+        setShowShockwave(true);
+        setCurrentResult(activeRoll);
+        setRollHistory((prev) => {
+          if (prev.some((r) => r.id === activeRoll.id)) return prev;
+          return [activeRoll, ...prev.slice(0, 7)];
+        });
+
+        if (activeRoll.isCritical) {
+          soundEngine.playCriticalSuccess();
+          try {
+            confetti({
+              particleCount: 80,
+              spread: 70,
+              origin: { y: 0.65, x: 0.5 },
+            });
+          } catch {
+            // ignore
           }
-
-          setTimeout(() => setShowShockwave(false), 900);
+        } else if (activeRoll.isFumble) {
+          soundEngine.playCriticalFumble();
         }
-      }, intervalTime);
-    }
+
+        setTimeout(() => setShowShockwave(false), 900);
+      }
+    }, intervalTime);
+    animationRef.current = timer;
+
+    return () => {
+      clearInterval(timer);
+      // If the animation was torn down before it settled (the arena unmounting,
+      // or React re-running this effect), release the die and clear the
+      // processed marker so the reveal runs again instead of leaving the arena
+      // stuck on "Tumbling Fate..." with the outcome never shown.
+      if (!settled) {
+        if (lastProcessedRollId.current === activeRoll.id) {
+          lastProcessedRollId.current = null;
+        }
+        setIsRolling(false);
+      }
+    };
   }, [activeRoll]);
 
   // Auto-switch to d20 when a DC check is pending

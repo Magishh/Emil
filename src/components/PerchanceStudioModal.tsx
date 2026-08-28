@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Wand2,
@@ -71,6 +71,20 @@ export const PerchanceStudioModal: React.FC<PerchanceStudioModalProps> = ({
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [customImportUrl, setCustomImportUrl] = useState('');
   const [generatedSeed, setGeneratedSeed] = useState<number | null>(null);
+
+  // The modal stays mounted between openings, so the initial* props only ever
+  // reached useState once. Re-apply them each time the studio is opened, so
+  // launching it from the scenery button really does preload the location name
+  // in landscape rather than leaving the last session's subject on screen.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialPrompt) {
+      setUserInput(initialPrompt);
+      setExpandedPrompt('');
+      setExpansionSource(null);
+    }
+    setAspectRatio(initialMode === 'scenery' ? '16:9' : '1:1');
+  }, [isOpen, initialPrompt, initialMode]);
 
   if (!isOpen) return null;
 

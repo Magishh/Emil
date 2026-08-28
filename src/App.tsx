@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Character,
   CampaignState,
@@ -176,7 +176,9 @@ export default function App() {
   const [isNewItemModalOpen, setIsNewItemModalOpen] = useState(false);
 
   // Mobile viewport tab switcher ('story' | 'character' | 'dice')
-  const [mobileActiveTab, setMobileActiveTab] = useState<'story' | 'character' | 'dice'>('story');
+  // The mobile dice control opens the Dice Arena modal rather than swapping the
+  // pane, so only these two tabs exist.
+  const [mobileActiveTab, setMobileActiveTab] = useState<'story' | 'character'>('story');
 
   // Save campaign state changes to local storage
   useEffect(() => {
@@ -360,63 +362,75 @@ export default function App() {
 
       const data = await res.json();
 
-      // Process updates to character
-      let updatedChar = { ...campaign.character };
+      // Applies this turn's DM updates on top of whatever the character looks
+      // like right now. It runs inside the setCampaign updater below so that
+      // any change made while the request was in flight (an item taken, an HP
+      // tweak, a new portrait) is not overwritten by a stale snapshot.
+      const applyCharacterUpdates = (base: Character): Character => {
+        const updatedChar: Character = { ...base };
 
-      // 1. Decrement duration on active status effects
-      let currentEffects = (updatedChar.statusEffects || [])
-        .map((eff) => {
-          if (eff.durationTurns !== undefined) {
-            return { ...eff, durationTurns: eff.durationTurns - 1 };
+        // 1. Decrement duration on active status effects
+        let currentEffects = (updatedChar.statusEffects || [])
+          .map((eff) => {
+            if (eff.durationTurns !== undefined) {
+              return { ...eff, durationTurns: eff.durationTurns - 1 };
+            }
+            return eff;
+          })
+          .filter((eff) => eff.durationTurns === undefined || eff.durationTurns > 0);
+
+        if (data.characterUpdates) {
+          if (data.characterUpdates.hpChange) {
+            updatedChar.hp = Math.max(
+              0,
+              Math.min(updatedChar.maxHp, updatedChar.hp + data.characterUpdates.hpChange)
+            );
           }
-          return eff;
-        })
-        .filter((eff) => eff.durationTurns === undefined || eff.durationTurns > 0);
+          if (data.characterUpdates.goldChange) {
+            updatedChar.gold = Math.max(0, updatedChar.gold + data.characterUpdates.goldChange);
+          }
 
+          // Apply new status effects from DM
+          if (data.characterUpdates.addedStatusEffects && Array.isArray(data.characterUpdates.addedStatusEffects)) {
+            for (const newEff of data.characterUpdates.addedStatusEffects) {
+              const effItem: StatusEffect = {
+                id: newEff.id || `eff-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                name: newEff.name,
+                type: newEff.type || 'debuff',
+                description: newEff.description || 'Condition applied.',
+                mechanicalEffect: newEff.mechanicalEffect,
+                durationTurns: newEff.durationTurns,
+                icon: newEff.icon || (newEff.type === 'buff' ? 'Sparkles' : 'Skull'),
+                color: newEff.color || (newEff.type === 'buff' ? '#10b981' : '#ef4444'),
+                source: 'DM Narrative Encounter',
+              };
+              currentEffects = [
+                ...currentEffects.filter((e) => e.name.toLowerCase() !== effItem.name.toLowerCase()),
+                effItem,
+              ];
+            }
+          }
+
+          // Remove cured or expired status effects from DM
+          if (data.characterUpdates.removedStatusEffectIds && Array.isArray(data.characterUpdates.removedStatusEffectIds)) {
+            const removeList = data.characterUpdates.removedStatusEffectIds.map((s: string) => String(s).toLowerCase());
+            currentEffects = currentEffects.filter(
+              (e) => !removeList.includes(e.id.toLowerCase()) && !removeList.includes(e.name.toLowerCase())
+            );
+          }
+        }
+
+        updatedChar.statusEffects = currentEffects;
+        return updatedChar;
+      };
+
+      // Sound and modal side effects belong outside the state updater, which
+      // React may invoke more than once.
       if (data.characterUpdates) {
-        if (data.characterUpdates.hpChange) {
-          const newHp = Math.max(
-            0,
-            Math.min(updatedChar.maxHp, updatedChar.hp + data.characterUpdates.hpChange)
-          );
-          updatedChar.hp = newHp;
-          if (data.characterUpdates.hpChange < 0) {
-            soundEngine.playSwordStrike();
-          } else if (data.characterUpdates.hpChange > 0) {
-            soundEngine.playHeal();
-          }
-        }
-        if (data.characterUpdates.goldChange) {
-          updatedChar.gold = Math.max(0, updatedChar.gold + data.characterUpdates.goldChange);
-        }
-
-        // Apply new status effects from DM
-        if (data.characterUpdates.addedStatusEffects && Array.isArray(data.characterUpdates.addedStatusEffects)) {
-          for (const newEff of data.characterUpdates.addedStatusEffects) {
-            const effItem: StatusEffect = {
-              id: newEff.id || `eff-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              name: newEff.name,
-              type: newEff.type || 'debuff',
-              description: newEff.description || 'Condition applied.',
-              mechanicalEffect: newEff.mechanicalEffect,
-              durationTurns: newEff.durationTurns,
-              icon: newEff.icon || (newEff.type === 'buff' ? 'Sparkles' : 'Skull'),
-              color: newEff.color || (newEff.type === 'buff' ? '#10b981' : '#ef4444'),
-              source: 'DM Narrative Encounter',
-            };
-            currentEffects = [
-              ...currentEffects.filter((e) => e.name.toLowerCase() !== effItem.name.toLowerCase()),
-              effItem,
-            ];
-          }
-        }
-
-        // Remove cured or expired status effects from DM
-        if (data.characterUpdates.removedStatusEffectIds && Array.isArray(data.characterUpdates.removedStatusEffectIds)) {
-          const removeList = data.characterUpdates.removedStatusEffectIds.map((s: string) => s.toLowerCase());
-          currentEffects = currentEffects.filter(
-            (e) => !removeList.includes(e.id.toLowerCase()) && !removeList.includes(e.name.toLowerCase())
-          );
+        if (data.characterUpdates.hpChange < 0) {
+          soundEngine.playSwordStrike();
+        } else if (data.characterUpdates.hpChange > 0) {
+          soundEngine.playHeal();
         }
 
         if (data.characterUpdates.newItem) {
@@ -442,8 +456,6 @@ export default function App() {
           soundEngine.playVictory();
         }
       }
-
-      updatedChar.statusEffects = currentEffects;
 
       // Append new turn to history
       const newHistoryEntry: StoryLogEntry = {
@@ -495,7 +507,7 @@ export default function App() {
 
       setCampaign((prev) => ({
         ...prev,
-        character: updatedChar,
+        character: applyCharacterUpdates(prev.character),
         currentStory: data.narrative,
         currentLocation: finalLocation,
         choices: data.choices || prev.choices,
@@ -860,7 +872,9 @@ export default function App() {
       let effectNarrative = '';
 
       if (item.type === 'potion') {
-        const healAmount = Math.floor(Math.random() * 8) + 6; // 2d4+4
+        // 2d4+4 (6 to 12), matching the healing potion text.
+        const healAmount =
+          Math.floor(Math.random() * 4) + 1 + Math.floor(Math.random() * 4) + 1 + 4;
         const oldHp = updatedChar.hp;
         updatedChar.hp = Math.min(updatedChar.maxHp, updatedChar.hp + healAmount);
         const healed = updatedChar.hp - oldHp;
@@ -1124,29 +1138,6 @@ export default function App() {
           </div>
         )}
 
-        {mobileActiveTab === 'dice' && (
-          <div className="flex-1 min-h-[440px]">
-            <DiceArena
-              activeRoll={activeRoll}
-              pendingCheck={campaign.pendingCheck}
-              onExecuteRoll={(roll) => {
-                setActiveRoll(roll);
-                if (campaign.pendingActionDescription) {
-                  processTurn(campaign.pendingActionDescription, roll);
-                }
-              }}
-              modifier={
-                campaign.pendingCheck
-                  ? getAbilityModifier(
-                      campaign.character.stats[
-                        campaign.pendingCheck.ability.toLowerCase() as keyof typeof campaign.character.stats
-                      ]
-                    )
-                  : 0
-              }
-            />
-          </div>
-        )}
       </div>
 
       {/* Desktop Layout: Left Column (7 Cols) = Unified Scenery & Story View, Right Column (5 Cols) = Full-Height Character Sheet */}
@@ -1260,7 +1251,10 @@ export default function App() {
         onLeave={handleLeaveDiscoveredItem}
         onEquip={handleEquipDiscoveredItem}
         onUse={handleUseDiscoveredItem}
-        onClose={() => setIsNewItemModalOpen(false)}
+        onClose={() => {
+          setIsNewItemModalOpen(false);
+          setDiscoveredItem(null);
+        }}
       />
 
       {/* Full Campaign Setup Onboarding Wizard */}

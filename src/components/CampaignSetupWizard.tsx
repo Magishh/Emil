@@ -49,6 +49,20 @@ interface CampaignSetupWizardProps {
   canCancel?: boolean;
 }
 
+// Custom classes may store their vitals as `baseHp`/`baseAc` (forge modal) or
+// `hp`/`ac` (built-in presets and the AI synthesizer). These resolve either
+// shape to a concrete number so a hero is never built with undefined vitals.
+const DEFAULT_CUSTOM_CLASS_HP = 18;
+const DEFAULT_CUSTOM_CLASS_AC = 14;
+
+function resolveClassHp(cls?: CustomClass): number {
+  return cls?.baseHp ?? cls?.hp ?? DEFAULT_CUSTOM_CLASS_HP;
+}
+
+function resolveClassAc(cls?: CustomClass): number {
+  return cls?.baseAc ?? cls?.ac ?? DEFAULT_CUSTOM_CLASS_AC;
+}
+
 export function CampaignSetupWizard({
   onStartCampaign,
   isInitializing,
@@ -355,9 +369,9 @@ export function CampaignSetupWizard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'race',
-          worldTheme,
-          premise: storyPremise,
+          targetType: 'race',
+          prompt: `A distinctive playable species native to ${worldTheme}: ${storyPremise}`,
+          storyTheme: worldTheme,
         }),
       });
       if (res.ok) {
@@ -382,9 +396,9 @@ export function CampaignSetupWizard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'class',
-          worldTheme,
-          premise: storyPremise,
+          targetType: 'class',
+          prompt: `A distinctive combat archetype suited to ${worldTheme}: ${storyPremise}`,
+          storyTheme: worldTheme,
         }),
       });
       if (res.ok) {
@@ -411,6 +425,10 @@ export function CampaignSetupWizard({
 
   const handleSelectCustomClass = (cls: CustomClass) => {
     setSelectedCustomClassId(cls.id);
+    // Adopt the class's own stat spread, mirroring standard class selection.
+    if (cls.defaultStats) {
+      setStats(cls.defaultStats);
+    }
   };
 
   // Expand Prompt with Gemini before Perchance AI generation
@@ -581,8 +599,16 @@ export function CampaignSetupWizard({
   const handleEmbark = async () => {
     const currentCustomClass = customClasses.find((c) => c.id === selectedCustomClassId);
     const activeClassName = currentCustomClass ? currentCustomClass.name : STARTING_CLASSES[selectedClassIndex].name;
-    const activeHp = currentCustomClass ? currentCustomClass.baseHp : STARTING_CLASSES[selectedClassIndex].hp;
-    const activeAc = currentCustomClass ? currentCustomClass.baseAc : STARTING_CLASSES[selectedClassIndex].ac;
+    // Custom classes carry their HP/AC as `baseHp`/`baseAc` when built in the
+    // forge modal but as `hp`/`ac` when they come from the presets or the AI
+    // synthesizer. Read both, and never let an undefined value through - it
+    // would produce a character with NaN hit points.
+    const activeHp = currentCustomClass
+      ? resolveClassHp(currentCustomClass)
+      : STARTING_CLASSES[selectedClassIndex].hp;
+    const activeAc = currentCustomClass
+      ? resolveClassAc(currentCustomClass)
+      : STARTING_CLASSES[selectedClassIndex].ac;
 
     const createdCharacter: Character = {
       name: characterName || 'Adventurer',
@@ -849,12 +875,12 @@ export function CampaignSetupWizard({
               alignment={alignment}
               hp={
                 selectedCustomClassId
-                  ? customClasses.find((c) => c.id === selectedCustomClassId)?.baseHp || 18
+                  ? resolveClassHp(customClasses.find((c) => c.id === selectedCustomClassId))
                   : STARTING_CLASSES[selectedClassIndex]?.hp
               }
               ac={
                 selectedCustomClassId
-                  ? customClasses.find((c) => c.id === selectedCustomClassId)?.baseAc || 14
+                  ? resolveClassAc(customClasses.find((c) => c.id === selectedCustomClassId))
                   : STARTING_CLASSES[selectedClassIndex]?.ac
               }
               speed={30}

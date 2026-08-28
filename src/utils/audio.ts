@@ -1065,7 +1065,11 @@ class SoundEngine {
 
   public resumeMusic() {
     if (this.currentAudioUrl && this.backgroundAudioElement) {
-      this.backgroundAudioElement.src = this.currentAudioUrl;
+      // Reassigning src unconditionally rewinds the track to 0:00, which turns
+      // "resume" into "restart". Only load it when it isn't already loaded.
+      if (this.backgroundAudioElement.src !== this.currentAudioUrl) {
+        this.backgroundAudioElement.src = this.currentAudioUrl;
+      }
       this.backgroundAudioElement.play().catch(() => {});
       this.isMusicPlaying = true;
       this.notifyListeners();
@@ -1504,11 +1508,34 @@ class SoundEngine {
     let step = 0;
     const totalSteps = comp.leadPattern.length;
 
+    // A composition with no pattern (e.g. a stored AI track whose audio blob is
+    // gone) would make every `% totalSteps` NaN and leave an interval spinning
+    // over silence.
+    if (!Number.isFinite(stepDuration) || stepDuration <= 0 || totalSteps <= 0) {
+      this.isMusicPlaying = false;
+      this.notifyListeners();
+      return;
+    }
+
+    const batchSteps = 8;
+    const batchDuration = batchSteps * stepDuration;
+    // Anchor scheduling to an advancing cursor instead of `ctx.currentTime` on
+    // each tick. The interval fires slightly early to stay ahead of the audio
+    // clock, and re-reading the clock each time used to shift every batch
+    // boundary, producing an audible hiccup once per bar.
+    let nextBatchTime = this.ctx.currentTime + 0.05;
+
     const scheduleLoop = () => {
       if (!this.ctx || !this.isMusicPlaying) return;
-      const now = this.ctx.currentTime;
 
-      for (let i = 0; i < 8; i++) {
+      // If the cursor has fallen behind (tab throttling, suspended context),
+      // re-anchor it so notes are not scheduled in the past.
+      if (nextBatchTime < this.ctx.currentTime) {
+        nextBatchTime = this.ctx.currentTime + 0.05;
+      }
+      const now = nextBatchTime;
+
+      for (let i = 0; i < batchSteps; i++) {
         const currentStep = (step + i) % totalSteps;
         const noteTime = now + (i * stepDuration);
 
@@ -1574,11 +1601,15 @@ class SoundEngine {
         }
       }
 
-      step = (step + 8) % totalSteps;
+      step = (step + batchSteps) % totalSteps;
+      nextBatchTime += batchDuration;
     };
 
     scheduleLoop();
-    this.musicIntervalId = window.setInterval(scheduleLoop, stepDuration * 8 * 1000 * 0.9);
+    // Fire a little ahead of the batch length so the next batch is queued
+    // before the current one runs out; the cursor above keeps the notes
+    // themselves exactly one batch apart.
+    this.musicIntervalId = window.setInterval(scheduleLoop, batchDuration * 1000 * 0.9);
   }
 
   // Synthesize and encode full 44.1kHz Stereo WAV audio data URL from composition

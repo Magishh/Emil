@@ -97,6 +97,16 @@ export const StartingMenu: React.FC<StartingMenuProps> = ({
     const updated = deleteCampaign(id);
     setCampaigns(updated);
     setDeletingId(null);
+
+    // The app still holds the deleted campaign in memory and would save it
+    // straight back on the next turn, so move off it explicitly.
+    if (currentCampaign && currentCampaign.campaignId === id) {
+      if (updated.length > 0) {
+        onSelectCampaign(updated[0]);
+      } else {
+        onCreateNewCampaign();
+      }
+    }
   };
 
   const handleDuplicate = (id: string, e: React.MouseEvent) => {

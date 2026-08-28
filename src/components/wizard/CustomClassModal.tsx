@@ -11,6 +11,13 @@ interface CustomClassModalProps {
   storyPremise: string;
 }
 
+// The AI synthesizer returns a hit die as a string ("d8"), while the form
+// stores it as a number. Number('d8') is NaN, so normalize before use.
+function parseHitDie(value: unknown, fallback: 6 | 8 | 10 | 12): 6 | 8 | 10 | 12 {
+  const parsed = typeof value === 'string' ? Number(value.replace(/^d/i, '')) : Number(value);
+  return parsed === 6 || parsed === 8 || parsed === 10 || parsed === 12 ? parsed : fallback;
+}
+
 export function CustomClassModal({
   isOpen,
   onClose,
@@ -38,25 +45,26 @@ export function CustomClassModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'class',
-          prompt: `${name || 'Mystic combat archetype'} for ${worldTheme}`,
-          worldTheme,
-          premise: storyPremise,
+          targetType: 'class',
+          prompt: `${name || 'Mystic combat archetype'} for ${worldTheme}: ${storyPremise}`,
+          storyTheme: worldTheme,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
         if (data.customClass) {
-          setName(data.customClass.name || name);
-          setHitDie(data.customClass.hitDie || 8);
-          setPrimaryAbility(data.customClass.primaryAbility || primaryAbility);
-          setDescription(data.customClass.description || description);
-          setBaseHp(data.customClass.baseHp || 18);
-          setBaseAc(data.customClass.baseAc || 14);
-          setSpecialAbility(data.customClass.specialAbility || '');
-          if (Array.isArray(data.customClass.startingEquipment)) {
-            setStartingEquipment(data.customClass.startingEquipment.join(', '));
+          const draft = data.customClass;
+          setName(draft.name || name);
+          setHitDie(parseHitDie(draft.hitDie, hitDie));
+          setPrimaryAbility(draft.primaryAbility || draft.primary || primaryAbility);
+          setDescription(draft.description || description);
+          setBaseHp(draft.baseHp ?? draft.hp ?? 18);
+          setBaseAc(draft.baseAc ?? draft.ac ?? 14);
+          setSpecialAbility(draft.specialAbility || '');
+          const equipment = draft.startingEquipment || draft.defaultItems;
+          if (Array.isArray(equipment)) {
+            setStartingEquipment(equipment.join(', '));
           }
           soundEngine.playLevelUp();
         }
@@ -72,19 +80,32 @@ export function CustomClassModal({
     e.preventDefault();
     if (!name.trim()) return;
 
+    const equipment = startingEquipment
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const resolvedHp = Number(baseHp) || 18;
+    const resolvedAc = Number(baseAc) || 14;
+    const resolvedPrimary = primaryAbility.trim() || 'STR / DEX';
+
+    // Write both field spellings so the wizard, the review step and the
+    // campaign builder all read a populated value regardless of which name
+    // they look for.
     const newClass: CustomClass = {
       id: `custom-class-${Date.now()}`,
       name: name.trim(),
-      hitDie: Number(hitDie) as 6 | 8 | 10 | 12,
-      primaryAbility: primaryAbility.trim() || 'STR / DEX',
+      hitDie: parseHitDie(hitDie, 8),
+      primary: resolvedPrimary,
+      primaryAbility: resolvedPrimary,
       description: description.trim() || `A dedicated discipline forged in the perils of ${worldTheme}.`,
-      baseHp: Number(baseHp) || 18,
-      baseAc: Number(baseAc) || 14,
+      hp: resolvedHp,
+      baseHp: resolvedHp,
+      ac: resolvedAc,
+      baseAc: resolvedAc,
       specialAbility: specialAbility.trim() || 'Mastery combat trait',
-      startingEquipment: startingEquipment
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      startingEquipment: equipment,
+      defaultItems: equipment,
+      isCustom: true,
     };
 
     onSaveClass(newClass);

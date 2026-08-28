@@ -36,22 +36,23 @@ export function CustomRaceModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'race',
-          prompt: `${name || 'Mystic planar species'} suitable for ${worldTheme}`,
-          worldTheme,
-          premise: storyPremise,
+          targetType: 'race',
+          prompt: `${name || 'Mystic planar species'} suitable for ${worldTheme}: ${storyPremise}`,
+          storyTheme: worldTheme,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
         if (data.race) {
-          setName(data.race.name || name);
-          setLore(data.race.lore || lore);
-          setRacialTraits(data.race.racialTraits || racialTraits);
-          setSpeed(data.race.speed || 30);
-          setSenses(data.race.senses || 'Darkvision 60ft');
-          setSpecialAbility(data.race.specialAbility || '');
+          const draft = data.race;
+          setName(draft.name || name);
+          setLore(draft.lore || lore);
+          // The synthesizer names this field `traits`; the form calls it `racialTraits`.
+          setRacialTraits(draft.racialTraits || draft.traits || racialTraits);
+          setSpeed(draft.speed || 30);
+          setSenses(draft.senses || 'Darkvision 60ft');
+          setSpecialAbility(draft.specialAbility || '');
           soundEngine.playLevelUp();
         }
       }
@@ -66,14 +67,19 @@ export function CustomRaceModal({
     e.preventDefault();
     if (!name.trim()) return;
 
+    const resolvedTraits = racialTraits.trim() || '+2 Attribute, +1 Attribute';
+
+    // Write both field spellings so every consumer reads a populated value.
     const newRace: CustomRace = {
       id: `custom-race-${Date.now()}`,
       name: name.trim(),
       lore: lore.trim() || `An ancient, distinct race hailing from the mysteries of ${worldTheme}.`,
-      racialTraits: racialTraits.trim() || '+2 Attribute, +1 Attribute',
+      traits: resolvedTraits,
+      racialTraits: resolvedTraits,
       speed: Number(speed) || 30,
       senses: senses.trim() || 'Darkvision 60ft',
       specialAbility: specialAbility.trim() || 'Unique racial heritage trait',
+      isCustom: true,
     };
 
     onSaveRace(newRace);
