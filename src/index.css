@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-app: #fdfaf1;
+    --bg-card: #ffffff;
+    --bg-card-subtle: #f5f0e3;
+    --border-main: #e2dcc5;
+    --border-accent: #b8ae8f;
+    --text-primary: #2c1810;
+    --text-secondary: #4a3227;
+    --text-muted: #8c7e6a;
+    --accent-gold: #d4af37;
+    color-scheme: light;
+  }
+
+  .dark {
+    --bg-app: #090d16;
+    --bg-card: #111827;
+    --bg-card-subtle: #172133;
+    --border-main: #1f2d42;
+    --border-accent: #334b6e;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #8092a8;
+    --accent-gold: #fbbf24;
+    color-scheme: dark;
+  }
+
+  html.dark {
+    background-color: #090d16;
+    color: #f8fafc;
+  }
+
+  html:not(.dark) {
+    background-color: #fdfaf1;
+    color: #2c1810;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  .font-serif {
+    font-family: 'Cinzel', 'Eczar', Georgia, serif;
+  }
+
+  .font-story {
+    font-family: 'Eczar', 'Cinzel', Georgia, serif;
+  }
+}
+
+/* 3D Dice Tumbling Animations */
+@keyframes diceTumble {
+  0% {
+    transform: rotate(0deg) rotateX(0deg) rotateY(0deg) scale(0.9) translateY(0);
+  }
+  25% {
+    transform: rotate(120deg) rotateX(180deg) rotateY(90deg) scale(1.18) translateY(-28px);
+  }
+  50% {
+    transform: rotate(240deg) rotateX(270deg) rotateY(210deg) scale(0.95) translateY(4px);
+  }
+  75% {
+    transform: rotate(320deg) rotateX(340deg) rotateY(310deg) scale(1.12) translateY(-14px);
+  }
+  100% {
+    transform: rotate(360deg) rotateX(360deg) rotateY(360deg) scale(1) translateY(0);
+  }
+}
+
+@keyframes diceTumbleReverse {
+  0% {
+    transform: rotate(0deg) rotateX(0deg) rotateY(0deg) scale(0.9) translateY(0);
+  }
+  25% {
+    transform: rotate(-120deg) rotateX(-180deg) rotateY(-90deg) scale(1.15) translateY(-24px);
+  }
+  50% {
+    transform: rotate(-240deg) rotateX(-270deg) rotateY(-210deg) scale(0.92) translateY(6px);
+  }
+  75% {
+    transform: rotate(-320deg) rotateX(-340deg) rotateY(-310deg) scale(1.1) translateY(-12px);
+  }
+  100% {
+    transform: rotate(-360deg) rotateX(-360deg) rotateY(-360deg) scale(1) translateY(0);
+  }
+}
+
+@keyframes shockwavePulse {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+.animate-dice-tumble {
+  animation: diceTumble 0.65s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animate-dice-tumble-reverse {
+  animation: diceTumbleReverse 0.65s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animate-shockwave {
+  animation: shockwavePulse 0.7s ease-out forwards;
+}
+
+/* Custom smooth natural scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d9d4c7;
+  border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #253347;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b8ae8f;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3e5270;
+}
+
+

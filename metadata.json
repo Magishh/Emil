@@ -1,0 +1,8 @@
+{
+  "name": "D\u0026D Solo Campaign DM 6.0",
+  "description": "An AI-powered solo D\u0026D campaign leader with procedural encounters, character sheet, dynamic scenery, interactive dice arena, and multi-choice actions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
