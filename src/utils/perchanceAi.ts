@@ -181,6 +181,36 @@ export function getFixedPerchanceItemImageUrl(item: {
 }
 
 /**
+ * True when an image URL is absent or is one of the flat procedural SVG
+ * placeholders, meaning the item still needs generated artwork.
+ */
+export function needsGeneratedSprite(imageUrl?: string): boolean {
+  if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim().length === 0) return true;
+  return imageUrl.startsWith('data:image/svg+xml;base64,PHN2Zw');
+}
+
+/**
+ * Guarantees an item carries generated Perchance artwork. Existing artwork is
+ * kept, so hand-tuned prompts in the catalogues survive; anything missing gets
+ * a deterministic sprite derived from the item's own fields, which means the
+ * same item always resolves to the same image.
+ */
+export function ensureItemSprite<T extends { name?: string; type?: string; imageUrl?: string }>(
+  item: T
+): T {
+  if (!item) return item;
+  if (!needsGeneratedSprite(item.imageUrl)) return item;
+  return { ...item, imageUrl: getFixedPerchanceItemImageUrl(item) };
+}
+
+export function ensureItemSprites<T extends { name?: string; type?: string; imageUrl?: string }>(
+  items: T[] | undefined
+): T[] {
+  if (!Array.isArray(items)) return [];
+  return items.map(ensureItemSprite);
+}
+
+/**
  * Generate an image using Perchance AI Image Generator
  * Sends the detailed prompt to https://perchance.org/perchance-ai-api
  */

@@ -1,5 +1,5 @@
 import { Character, CharacterStats, DieType, LocationInfo, InventoryItem, StatusEffect, StoryHeroConcept, CustomRace, CustomClass } from '../types';
-import { getFixedPerchanceItemImageUrl } from './perchanceAi';
+import { getFixedPerchanceItemImageUrl, ensureItemSprite, ensureItemSprites } from './perchanceAi';
 
 export const PRESET_CONDITIONS: Omit<StatusEffect, 'id'>[] = [
   {
@@ -476,7 +476,7 @@ export interface StoryRealmPreset {
   bespokeHeroes: StoryHeroConcept[];
 }
 
-export const STORY_REALM_PRESETS: StoryRealmPreset[] = [
+const RAW_STORY_REALM_PRESETS: StoryRealmPreset[] = [
   {
     id: 'sunken-crypt',
     title: 'Sunken Necropolis of Kazal-Dûr',
@@ -1400,7 +1400,7 @@ export const STORY_REALM_PRESETS: StoryRealmPreset[] = [
 /**
  * Returns bespoke hero concepts for any given story premise text
  */
-export function getStoryHeroConceptsForPremise(storyPremise: string): StoryHeroConcept[] {
+function pickStoryHeroConcepts(storyPremise: string): StoryHeroConcept[] {
   const clean = storyPremise.toLowerCase();
   for (const preset of STORY_REALM_PRESETS) {
     if (clean.includes(preset.title.toLowerCase()) || clean.includes(preset.id)) {
@@ -1489,7 +1489,7 @@ export function getStoryHeroConceptsForPremise(storyPremise: string): StoryHeroC
 /**
  * Returns thematic items for any given story premise text
  */
-export function getThematicItemsForPremise(storyPremise: string): InventoryItem[] {
+function pickThematicItems(storyPremise: string): InventoryItem[] {
   const clean = storyPremise.toLowerCase();
   for (const preset of STORY_REALM_PRESETS) {
     if (clean.includes(preset.title.toLowerCase()) || clean.includes(preset.id)) {
@@ -1582,7 +1582,7 @@ export function getRecommendedRacesForPremise(storyPremise: string): string[] {
   return ['Human', 'High Elf', 'Mountain Dwarf', 'Half-Elf', 'Tiefling', 'Dragonborn'];
 }
 
-export const ITEM_CATALOG: InventoryItem[] = [
+const RAW_ITEM_CATALOG: InventoryItem[] = [
   {
     id: 'cat-w1',
     name: 'Radiant Sunblade Longsword',
@@ -1781,7 +1781,7 @@ export const STORY_PREMISE_SUGGESTIONS = [
     theme: 'Steampunk & Magic Heist',
   },
 ];
-export const PRESET_HEROES: Character[] = [
+const RAW_PRESET_HEROES: Character[] = [
   {
     name: 'Valen Shadowstride',
     race: 'Half-Elf',
@@ -1981,6 +1981,34 @@ export const PRESET_HEROES: Character[] = [
     ],
   },
 ];
+
+// Every item shown anywhere in the game is routed through here, so a sprite is
+// generated up front rather than lazily at render time. Items that already
+// carry artwork keep it; the rest get a deterministic Perchance image.
+function withHeroLoadoutSprites(hero: StoryHeroConcept): StoryHeroConcept {
+  return { ...hero, items: ensureItemSprites(hero.items) };
+}
+
+export const STORY_REALM_PRESETS: StoryRealmPreset[] = RAW_STORY_REALM_PRESETS.map((preset) => ({
+  ...preset,
+  thematicItems: ensureItemSprites(preset.thematicItems),
+  bespokeHeroes: (preset.bespokeHeroes || []).map(withHeroLoadoutSprites),
+}));
+
+export const ITEM_CATALOG: InventoryItem[] = ensureItemSprites(RAW_ITEM_CATALOG);
+
+export const PRESET_HEROES: Character[] = RAW_PRESET_HEROES.map((hero) => ({
+  ...hero,
+  inventory: ensureItemSprites(hero.inventory),
+}));
+
+export function getStoryHeroConceptsForPremise(storyPremise: string): StoryHeroConcept[] {
+  return pickStoryHeroConcepts(storyPremise).map(withHeroLoadoutSprites);
+}
+
+export function getThematicItemsForPremise(storyPremise: string): InventoryItem[] {
+  return ensureItemSprites(pickThematicItems(storyPremise));
+}
 
 export const INITIAL_LOCATION: LocationInfo = {
   name: 'Sunken Crypt of Kazal-Dûr',

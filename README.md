@@ -2,7 +2,7 @@
 
 An AI-guided solo Dungeons & Dragons campaign that runs as a local web app:
 procedural encounters, a full character sheet, an interactive dice arena,
-generated scenery, narration and a soundtrack.
+generated scenery, narration, and a synthesised ambience engine.
 
 ## Run it on Arch Linux
 
@@ -47,7 +47,7 @@ machine. If port 3000 is busy it moves to the next free port and prints the URL.
 ## Enabling the AI Dungeon Master
 
 The app runs without any API key, falling back to built-in procedural
-storytelling, browser speech and synthesised music. To turn on the Gemini-powered
+storytelling, browser speech and a fully synthesised ambience engine. To turn on the Gemini-powered
 Dungeon Master, AI artwork and narration, add your key:
 
 ```sh

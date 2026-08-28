@@ -148,7 +148,9 @@ export default function App() {
   const [isNarratorModalOpen, setIsNarratorModalOpen] = useState(false);
   const [narratorPlayback, setNarratorPlayback] = useState(() => narratorEngine.getState());
   const [isDiceArenaOpen, setIsDiceArenaOpen] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  // Mute is owned by the sound engine so the header and the Ambience Studio
+  // never disagree about it.
+  const soundEnabled = musicState.soundEnabled;
 
   // Subscribe to background music engine
   useEffect(() => {
@@ -907,7 +909,6 @@ export default function App() {
   // Toggle Sound
   const handleToggleSound = () => {
     const next = soundEngine.toggleSound();
-    setSoundEnabled(next);
     if (!next) {
       narratorEngine.stop();
     }
@@ -967,13 +968,13 @@ export default function App() {
             <span className="hidden sm:inline">Quests</span>
           </button>
 
-          {/* Campaign Music Studio Button */}
+          {/* Campaign Ambience Studio Button */}
           <button
             onClick={() => setIsMusicPlayerOpen(true)}
             title={
               musicState.isPlaying
-                ? `Playing: ${musicState.currentComposition?.title || 'Fantasy Soundtrack'} (Click to open studio)`
-                : "Campaign Music Studio"
+                ? `Playing: ${musicState.currentScene?.title || 'Ambience'} (Click to open studio)`
+                : "Campaign Ambience Studio"
             }
             className={`px-2 sm:px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-serif font-bold shadow-xs cursor-pointer ${
               musicState.isPlaying
@@ -987,7 +988,7 @@ export default function App() {
               <Music className="w-3.5 h-3.5 text-[#8c7e6a] dark:text-[#94a3b8]" />
             )}
             <span className="hidden md:inline">
-              {musicState.isPlaying ? 'Music Playing' : 'Music'}
+              {musicState.isPlaying ? 'Ambience On' : 'Ambience'}
             </span>
           </button>
 
@@ -1277,7 +1278,7 @@ export default function App() {
       />
 
       {/* Background Music Floating Mini-Player (Visible when music is active & modal closed) */}
-      {musicState.currentComposition && !isMusicPlayerOpen && (
+      {musicState.currentScene && !isMusicPlayerOpen && (
         <div
           id="floating-music-dock"
           className="fixed bottom-3 right-3 z-30 flex items-center gap-2 px-3 py-2 rounded-2xl bg-[#2c1810]/95 dark:bg-[#0f172a]/95 text-[#fdfaf1] dark:text-[#f8fafc] border border-[#b8ae8f]/50 dark:border-[#334155] shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-bottom-2 duration-200 max-w-[280px] sm:max-w-xs"
@@ -1291,7 +1292,7 @@ export default function App() {
                 soundEngine.resumeMusic();
               }
             }}
-            title={musicState.isPlaying ? 'Pause Background Music' : 'Resume Background Music'}
+            title={musicState.isPlaying ? 'Pause Ambience' : 'Resume Ambience'}
             className="w-7 h-7 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 transition-transform active:scale-95 cursor-pointer shadow-xs"
           >
             {musicState.isPlaying ? (
@@ -1304,11 +1305,11 @@ export default function App() {
           <div
             onClick={() => setIsMusicPlayerOpen(true)}
             className="flex-1 min-w-0 cursor-pointer group"
-            title="Click to open full Music Studio"
+            title="Click to open full Ambience Studio"
           >
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-serif font-bold truncate group-hover:text-amber-400 transition-colors">
-                {musicState.currentComposition.title}
+                {musicState.currentScene.title}
               </span>
             </div>
             <p className="text-[9px] text-[#b8ae8f] dark:text-[#94a3b8] truncate flex items-center gap-1">
@@ -1320,7 +1321,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setIsMusicPlayerOpen(true)}
-            title="Open Music Studio"
+            title="Open Ambience Studio"
             className="p-1 rounded-lg hover:bg-white/10 text-[#b8ae8f] dark:text-[#94a3b8] hover:text-white transition-colors cursor-pointer"
           >
             <Disc3 className={`w-4 h-4 ${musicState.isPlaying ? 'animate-spin' : ''}`} />

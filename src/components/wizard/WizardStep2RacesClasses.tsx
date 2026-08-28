@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Wand2, Shield, Swords, Plus, Trash2, Dices, Flame, Skull, Heart } from 'lucide-react';
+import { Sparkles, Shield, Swords, Plus, Trash2, Dices, Flame, Skull, Heart } from 'lucide-react';
 import { CustomRace, CustomClass, RuleStrictness, DifficultyLevel } from '../../types';
 import { STARTING_CLASSES, STARTING_RACES } from '../../utils/diceUtils';
 import { soundEngine } from '../../utils/audio';
@@ -44,6 +44,73 @@ function formatHitDie(hitDie: CustomClass['hitDie'] | undefined): string {
   return raw.toLowerCase().startsWith('d') ? raw.toLowerCase() : `d${raw}`;
 }
 
+type OptionSource = 'classic' | 'custom';
+
+/** Classic / Custom switch shown above the race and class pickers. */
+function SourceToggle({
+  value,
+  onChange,
+  classicCount,
+  customCount,
+}: {
+  value: OptionSource;
+  onChange: (next: OptionSource) => void;
+  classicCount: number;
+  customCount: number;
+}) {
+  const options: { id: OptionSource; label: string; count: number }[] = [
+    { id: 'classic', label: 'Classic', count: classicCount },
+    { id: 'custom', label: 'Custom', count: customCount },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label="Choose option source"
+      className="flex items-center gap-1 p-1 rounded-2xl bg-[#0b1424] border border-[#1e2d4a] shrink-0"
+    >
+      {options.map((option) => {
+        const isActive = value === option.id;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => {
+              if (!isActive) soundEngine.playDiceRoll();
+              onChange(option.id);
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              isActive
+                ? 'bg-amber-500 text-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-[#152341]'
+            }`}
+          >
+            <span>{option.label}</span>
+            <span
+              className={`text-[10px] font-mono ${
+                isActive ? 'text-black/70' : 'text-slate-500'
+              }`}
+            >
+              {option.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Shown when the Custom source has nothing in it yet. */
+function EmptyCustomState({ label, hint }: { label: string; hint: string }) {
+  return (
+    <div className="p-6 rounded-2xl border border-dashed border-[#26375a] bg-[#090f1a] text-center space-y-1">
+      <p className="text-sm font-serif font-bold text-slate-300">{label}</p>
+      <p className="text-[11px] text-slate-500 font-sans">{hint}</p>
+    </div>
+  );
+}
+
 export function WizardStep2RacesClasses({
   selectedRace,
   onSelectRace,
@@ -71,6 +138,11 @@ export function WizardStep2RacesClasses({
   worldTheme,
 }: WizardStep2RacesClassesProps) {
   const [activeSubTab, setActiveSubTab] = React.useState<'races' | 'classes' | 'rules'>('races');
+  // Each picker shows one source at a time - the classic 5e set, or the ones
+  // the player forged - so the step is a single simple choice instead of every
+  // option at once.
+  const [raceSource, setRaceSource] = React.useState<OptionSource>('classic');
+  const [classSource, setClassSource] = React.useState<OptionSource>('classic');
 
   return (
     <div className="space-y-6">
@@ -138,17 +210,90 @@ export function WizardStep2RacesClasses({
       {/* ==================================================== */}
       {activeSubTab === 'races' && (
         <div className="space-y-4 font-serif">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-xs font-bold text-amber-300 block">
                 Selected Race: <strong className="text-white text-sm">{selectedRace}</strong>
               </span>
               <span className="text-[11px] text-slate-400">
-                Choose a classic D&D race, story-recommended race, or craft a new custom race.
+                Choose a classic D&amp;D race, or switch to Custom for races you have forged.
               </span>
             </div>
 
-            {/* Action Buttons for Custom Races */}
+            <SourceToggle
+              value={raceSource}
+              onChange={setRaceSource}
+              classicCount={STARTING_RACES.length}
+              customCount={customRaces.length}
+            />
+          </div>
+
+          {raceSource === 'classic' ? (
+            <>
+          {/* Recommended Races */}
+          {recommendedRaces.length > 0 && (
+            <div>
+              <label className="text-[11px] font-bold text-slate-300 block mb-1.5">
+                ⭐ Recommended for Current Story Setting:
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {recommendedRaces.map((r) => {
+                  const isSelected = selectedRace === r;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => {
+                        soundEngine.playDiceRoll();
+                        onSelectRace(r);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-serif transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'border-amber-400 bg-amber-500 text-black font-bold shadow-xs'
+                          : 'border-amber-500/30 bg-[#111c30] text-amber-200 hover:bg-[#182742]'
+                      }`}
+                    >
+                      <span>⭐ {r}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* All Classic D&D Races */}
+          <div>
+            <label className="text-[11px] font-bold text-slate-300 block mb-1.5">
+              Classic & Exotic D&D 5e Races:
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+              {STARTING_RACES.map((r) => {
+                const isSelected = selectedRace === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      soundEngine.playDiceRoll();
+                      onSelectRace(r);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer flex items-center justify-between ${
+                      isSelected
+                        ? 'border-amber-400 bg-amber-500 text-black font-bold shadow-xs'
+                        : 'border-[#1e2d4a] bg-[#0c1422] text-slate-200 hover:border-[#2f4366] hover:bg-[#121c30]'
+                    }`}
+                  >
+                    <span className="truncate">{r}</span>
+                    {isSelected && <span className="text-[10px] font-bold">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -169,7 +314,7 @@ export function WizardStep2RacesClasses({
                 <span>+ Manually Add New Race</span>
               </button>
             </div>
-          </div>
+              </div>
 
           {/* Custom Races Shelf (if any exist) */}
           {customRaces.length > 0 && (
@@ -241,75 +386,20 @@ export function WizardStep2RacesClasses({
             </div>
           )}
 
-          {/* Recommended Races */}
-          {recommendedRaces.length > 0 && (
-            <div>
-              <label className="text-[11px] font-bold text-slate-300 block mb-1.5">
-                ⭐ Recommended for Current Story Setting:
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {recommendedRaces.map((r) => {
-                  const isSelected = selectedRace === r;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => {
-                        soundEngine.playDiceRoll();
-                        onSelectRace(r);
-                      }}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-serif transition-all cursor-pointer flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'border-amber-400 bg-amber-500 text-black font-bold shadow-xs'
-                          : 'border-amber-500/30 bg-[#111c30] text-amber-200 hover:bg-[#182742]'
-                      }`}
-                    >
-                      <span>⭐ {r}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              {customRaces.length === 0 && (
+                <EmptyCustomState
+                  label="No custom races forged yet"
+                  hint="Use “Manually Add New Race” to create one, or switch back to Classic."
+                />
+              )}
+            </>
           )}
-
-          {/* All Classic D&D Races */}
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 block mb-1.5">
-              Classic & Exotic D&D 5e Races:
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-              {STARTING_RACES.map((r) => {
-                const isSelected = selectedRace === r;
-                return (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => {
-                      soundEngine.playDiceRoll();
-                      onSelectRace(r);
-                    }}
-                    className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer flex items-center justify-between ${
-                      isSelected
-                        ? 'border-amber-400 bg-amber-500 text-black font-bold shadow-xs'
-                        : 'border-[#1e2d4a] bg-[#0c1422] text-slate-200 hover:border-[#2f4366] hover:bg-[#121c30]'
-                    }`}
-                  >
-                    <span className="truncate">{r}</span>
-                    {isSelected && <span className="text-[10px] font-bold">✓</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
       )}
 
-      {/* ==================================================== */}
-      {/* SUBTAB 2: CLASSES & CUSTOM CLASS CREATOR */}
-      {/* ==================================================== */}
       {activeSubTab === 'classes' && (
         <div className="space-y-4 font-serif">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-xs font-bold text-amber-300 block">
                 Selected Class:{' '}
@@ -320,11 +410,69 @@ export function WizardStep2RacesClasses({
                 </strong>
               </span>
               <span className="text-[11px] text-slate-400">
-                Choose a classic 5e class or forge your own custom class archetype with custom Hit Die and starting gear.
+                Choose a classic 5e class, or switch to Custom for classes you have forged.
               </span>
             </div>
 
-            {/* Action Buttons for Custom Classes */}
+            <SourceToggle
+              value={classSource}
+              onChange={setClassSource}
+              classicCount={STARTING_CLASSES.length}
+              customCount={customClasses.length}
+            />
+          </div>
+
+          {classSource === 'classic' ? (
+            <>
+          {/* Classic D&D 5e Classes */}
+          <div>
+            <label className="text-[11px] font-bold text-slate-300 block mb-1.5">
+              Classic D&D 5e Classes:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {STARTING_CLASSES.map((cls, idx) => {
+                const isSelected = !selectedCustomClassId && selectedClassIndex === idx;
+                return (
+                  <div
+                    key={cls.name}
+                    onClick={() => {
+                      soundEngine.playDiceRoll();
+                      onSelectClassIndex(idx);
+                    }}
+                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-amber-400 bg-[#162744] shadow-md ring-1 ring-amber-400/40'
+                        : 'border-[#1e2d4a] bg-[#0c1422] hover:border-[#2f4366] hover:bg-[#121c30]'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                          d{cls.hitDie} • {cls.primary}
+                        </span>
+                        {isSelected && (
+                          <span className="w-3.5 h-3.5 rounded-full bg-amber-400 text-black flex items-center justify-center text-[9px] font-bold">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-bold text-xs sm:text-sm text-slate-100">{cls.name}</h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{cls.description}</p>
+                    </div>
+
+                    <div className="mt-2 pt-1.5 border-t border-[#1e2d4a] flex items-center justify-between text-[10px] font-mono text-slate-300">
+                      <span>HP: {cls.hp} • AC: {cls.ac}</span>
+                      <span className="text-amber-400 font-sans">⚔️</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -345,7 +493,7 @@ export function WizardStep2RacesClasses({
                 <span>+ Manually Add New Class</span>
               </button>
             </div>
-          </div>
+              </div>
 
           {/* Custom Classes Shelf */}
           {customClasses.length > 0 && (
@@ -419,53 +567,17 @@ export function WizardStep2RacesClasses({
             </div>
           )}
 
-          {/* Classic D&D 5e Classes */}
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 block mb-1.5">
-              Classic D&D 5e Classes:
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-              {STARTING_CLASSES.map((cls, idx) => {
-                const isSelected = !selectedCustomClassId && selectedClassIndex === idx;
-                return (
-                  <div
-                    key={cls.name}
-                    onClick={() => {
-                      soundEngine.playDiceRoll();
-                      onSelectClassIndex(idx);
-                    }}
-                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                      isSelected
-                        ? 'border-amber-400 bg-[#162744] shadow-md ring-1 ring-amber-400/40'
-                        : 'border-[#1e2d4a] bg-[#0c1422] hover:border-[#2f4366] hover:bg-[#121c30]'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                          d{cls.hitDie} • {cls.primary}
-                        </span>
-                        {isSelected && (
-                          <span className="w-3.5 h-3.5 rounded-full bg-amber-400 text-black flex items-center justify-center text-[9px] font-bold">
-                            ✓
-                          </span>
-                        )}
-                      </div>
-                      <h4 className="font-bold text-xs sm:text-sm text-slate-100">{cls.name}</h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{cls.description}</p>
-                    </div>
-
-                    <div className="mt-2 pt-1.5 border-t border-[#1e2d4a] flex items-center justify-between text-[10px] font-mono text-slate-300">
-                      <span>HP: {cls.hp} • AC: {cls.ac}</span>
-                      <span className="text-amber-400 font-sans">⚔️</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+              {customClasses.length === 0 && (
+                <EmptyCustomState
+                  label="No custom classes forged yet"
+                  hint="Use “Manually Add New Class” to create one, or switch back to Classic."
+                />
+              )}
+            </>
+          )}
         </div>
       )}
+
 
       {/* ==================================================== */}
       {/* SUBTAB 3: RULES & DIFFICULTY */}
