@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Arch packaging build artifacts (makepkg runs inside packaging/arch/)
+packaging/arch/src/
+packaging/arch/pkg/
+packaging/arch/*.pkg.tar.zst
+packaging/arch/*.tar.gz

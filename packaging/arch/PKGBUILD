@@ -1,0 +1,59 @@
+# Maintainer: Emil <max06lindley@gmail.com>
+pkgname=dnd-solo-campaign-dm-git
+_pkgid=dnd-solo-dm
+pkgver=r0
+pkgrel=1
+pkgdesc="AI-guided solo D&D campaign that runs as a local web app"
+arch=('any')
+url="https://github.com/Magishh/Emil"
+license=('MIT')
+# The published server is a single self-contained bundle, so only a Node
+# runtime is needed once it is built.
+depends=('nodejs>=20')
+makedepends=('git' 'npm')
+provides=("$_pkgid")
+conflicts=("$_pkgid")
+source=("$pkgname::git+https://github.com/Magishh/Emil.git#branch=claude/bug-fixes-1k56pg")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/$pkgname"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$srcdir/$pkgname"
+  npm ci
+  npm run build
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+
+  # dist/ holds the built frontend plus the bundled server; nothing else is
+  # needed at runtime.
+  install -d "$pkgdir/usr/lib/$_pkgid"
+  cp -r dist "$pkgdir/usr/lib/$_pkgid/"
+  rm -f "$pkgdir/usr/lib/$_pkgid/dist/server.cjs.map"
+
+  # Launcher on PATH.
+  install -d "$pkgdir/usr/bin"
+  cat > "$pkgdir/usr/bin/$_pkgid" <<'LAUNCH'
+#!/usr/bin/env bash
+set -euo pipefail
+export NODE_ENV=production
+export DND_OPEN_BROWSER="${DND_OPEN_BROWSER:-1}"
+exec node /usr/lib/dnd-solo-dm/dist/server.cjs "$@"
+LAUNCH
+  chmod 755 "$pkgdir/usr/bin/$_pkgid"
+
+  # Applications-menu entry and icon.
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/$_pkgid.desktop" < <(
+    sed -e "s|@EXEC@|/usr/bin/$_pkgid|g" -e "s|@ICON@|$_pkgid|g" \
+      "packaging/$_pkgid.desktop.in"
+  )
+  install -Dm644 "packaging/$_pkgid.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/$_pkgid.svg"
+
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

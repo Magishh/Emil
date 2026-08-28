@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=D&D Solo Campaign DM
+GenericName=Solo Tabletop RPG
+Comment=AI-guided solo D&D campaign with dice, character sheet and procedural encounters
+Exec=@EXEC@
+Icon=@ICON@
+Terminal=false
+Categories=Game;RolePlaying;
+Keywords=dnd;rpg;dice;dungeon;tabletop;
+StartupNotify=true

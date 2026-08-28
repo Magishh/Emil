@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# Launcher for the D&D Solo Campaign DM web app.
+#
+# Clone the repository and run ./dnd-solo-dm - it installs dependencies and
+# builds the app the first time (and whenever sources change), starts the local
+# server and opens your browser.
+set -euo pipefail
+
+APP_NAME="D&D Solo Campaign DM"
+APP_ID="dnd-solo-dm"
+
+# Resolve the real project directory even when invoked through a symlink.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+APP_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
+OPEN_BROWSER=1
+FORCE_REBUILD=0
+DEV_MODE=0
+
+usage() {
+  cat <<EOF
+$APP_NAME
+
+Usage: ./dnd-solo-dm [options]
+
+Options:
+  --port <n>         Listen on this port (default 3000, or the next free one).
+  --host <addr>      Bind address (default 127.0.0.1). Use 0.0.0.0 to share
+                     the app with other machines on your network.
+  --no-open          Do not launch a browser.
+  --rebuild          Force a fresh build before starting.
+  --dev              Run the Vite dev server with hot reload instead.
+  --install-desktop  Add a launcher to your applications menu, then exit.
+  --uninstall-desktop
+                     Remove that launcher, then exit.
+  -h, --help         Show this help.
+
+Configuration:
+  Put GEMINI_API_KEY in \${XDG_CONFIG_HOME:-\$HOME/.config}/$APP_ID/.env to
+  enable the Gemini-powered Dungeon Master. Without it the app still runs on
+  its built-in procedural fallbacks.
+EOF
+}
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$APP_ID"
+DESKTOP_FILE="${XDG_DATA_HOME:-$HOME/.local/share}/applications/$APP_ID.desktop"
+ICON_FILE="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/$APP_ID.svg"
+
+install_desktop() {
+  mkdir -p "$(dirname "$DESKTOP_FILE")" "$(dirname "$ICON_FILE")"
+  cp "$APP_DIR/packaging/$APP_ID.svg" "$ICON_FILE"
+  sed -e "s|@EXEC@|$APP_DIR/dnd-solo-dm|g" -e "s|@ICON@|$APP_ID|g" \
+    "$APP_DIR/packaging/$APP_ID.desktop.in" > "$DESKTOP_FILE"
+  command -v update-desktop-database >/dev/null 2>&1 &&
+    update-desktop-database "$(dirname "$DESKTOP_FILE")" >/dev/null 2>&1 || true
+  echo "Installed launcher: $DESKTOP_FILE"
+  echo "\"$APP_NAME\" should now appear in your applications menu."
+}
+
+uninstall_desktop() {
+  rm -f "$DESKTOP_FILE" "$ICON_FILE"
+  command -v update-desktop-database >/dev/null 2>&1 &&
+    update-desktop-database "$(dirname "$DESKTOP_FILE")" >/dev/null 2>&1 || true
+  echo "Removed launcher: $DESKTOP_FILE"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --port) export PORT="${2:?--port needs a number}"; shift 2 ;;
+    --host) export HOST="${2:?--host needs an address}"; shift 2 ;;
+    --no-open) OPEN_BROWSER=0; shift ;;
+    --rebuild) FORCE_REBUILD=1; shift ;;
+    --dev) DEV_MODE=1; shift ;;
+    --install-desktop) install_desktop; exit 0 ;;
+    --uninstall-desktop) uninstall_desktop; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+cd "$APP_DIR"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Node.js is required but was not found." >&2
+  echo "On Arch Linux:  sudo pacman -S nodejs npm" >&2
+  exit 1
+fi
+
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "Node.js 20 or newer is required (found $(node -v))." >&2
+  echo "On Arch Linux:  sudo pacman -S nodejs npm" >&2
+  exit 1
+fi
+
+mkdir -p "$CONFIG_DIR"
+
+# Install dependencies on first run, or when the lockfile has moved on.
+if [ ! -d node_modules ] || [ package-lock.json -nt node_modules ]; then
+  echo "Installing dependencies (first run may take a minute)..."
+  if [ -f package-lock.json ]; then npm ci; else npm install; fi
+  touch node_modules
+fi
+
+if [ "$DEV_MODE" = "1" ]; then
+  echo "Starting development server (hot reload)..."
+  exec npx tsx server.ts
+fi
+
+# Rebuild when the build output is missing or older than any source file.
+needs_build=0
+if [ "$FORCE_REBUILD" = "1" ] || [ ! -f dist/index.html ] || [ ! -f dist/server.cjs ]; then
+  needs_build=1
+elif [ -n "$(find src server.ts index.html vite.config.ts package.json \
+              -newer dist/index.html 2>/dev/null | head -n 1)" ]; then
+  needs_build=1
+fi
+
+if [ "$needs_build" = "1" ]; then
+  echo "Building the app..."
+  npm run build
+fi
+
+export NODE_ENV=production
+export DND_OPEN_BROWSER="$OPEN_BROWSER"
+exec node dist/server.cjs

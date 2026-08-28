@@ -1,13 +1,29 @@
 import express from "express";
+import fs from "fs";
+import os from "os";
 import path from "path";
+import { spawn } from "child_process";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { createServer as createViteServer } from "vite";
 
+// Load configuration from the user's config directory first, so an installed
+// copy (e.g. /opt/dnd-solo-dm) can be configured without editing files it owns,
+// then from the project directory for a plain git clone.
+const USER_CONFIG_DIR = path.join(
+  process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"),
+  "dnd-solo-dm"
+);
+dotenv.config({ path: path.join(USER_CONFIG_DIR, ".env") });
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+
+// Desktop defaults: a port that can be moved when something already holds it,
+// and a loopback bind so a personal machine does not publish the app - and the
+// API key behind it - to the whole local network. Set HOST=0.0.0.0 to share it.
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || "127.0.0.1";
+const MAX_PORT_ATTEMPTS = 20;
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -2383,24 +2399,125 @@ function generateProceduralCharacterSvg(
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+// Locate the built frontend. The bundled server may be launched from any
+// working directory (a desktop launcher, a /usr/bin wrapper), so prefer the
+// directory the running script lives in over process.cwd().
+function resolveDistPath(): string {
+  const scriptDir = process.argv[1]
+    ? path.dirname(path.resolve(process.argv[1]))
+    : undefined;
+  const candidates = [
+    process.env.DND_DIST_DIR,
+    scriptDir,
+    scriptDir ? path.join(scriptDir, "dist") : undefined,
+    path.join(process.cwd(), "dist"),
+  ].filter((c): c is string => Boolean(c));
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, "index.html"))) return candidate;
+  }
+  return candidates[candidates.length - 1];
+}
+
+function openInBrowser(url: string) {
+  try {
+    const child = spawn("xdg-open", [url], { stdio: "ignore", detached: true });
+    // A missing xdg-open must not take the server down with it.
+    child.on("error", () => {
+      console.log("  (could not launch a browser automatically - open the URL above)");
+    });
+    child.unref();
+  } catch {
+    // Ignore: the URL is printed above either way.
+  }
+}
+
+function announce(url: string) {
+  const hasKey = Boolean(process.env.GEMINI_API_KEY);
+  console.log("");
+  console.log("  D&D Solo Campaign DM is running");
+  console.log(`  ${url}`);
+  console.log("");
+  console.log(
+    hasKey
+      ? "  AI Dungeon Master: enabled (GEMINI_API_KEY found)"
+      : `  AI Dungeon Master: offline - the app runs on its built-in
+` +
+        `  procedural fallbacks. To enable Gemini, put GEMINI_API_KEY in
+` +
+        `  ${path.join(USER_CONFIG_DIR, ".env")}`
+  );
+  console.log("");
+  console.log("  Press Ctrl+C to stop.");
+  console.log("");
+}
+
 // Setup Vite middleware for development or serve static dist for production
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    // Imported lazily so a production build never needs Vite (or the rest of
+    // the dev toolchain) installed at runtime.
+    let createViteServer;
+    try {
+      ({ createServer: createViteServer } = await import("vite"));
+    } catch {
+      console.error(
+        "Vite is not installed, so the development server cannot start.\n" +
+          "Run \"npm install\" for development, or set NODE_ENV=production to " +
+          "serve the built app."
+      );
+      process.exit(1);
+    }
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = resolveDistPath();
+    if (!fs.existsSync(path.join(distPath, "index.html"))) {
+      console.error(
+        `Could not find the built frontend in ${distPath}.\n` +
+          `Run "npm run build" first, or set DND_DIST_DIR to the directory holding index.html.`
+      );
+      process.exit(1);
+    }
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`D&D Solo Campaign DM server running on port ${PORT}`);
+  listenWithFallback(PORT, MAX_PORT_ATTEMPTS);
+}
+
+// Try the requested port, then the next few, so launching the app twice (or
+// alongside another dev server) reports a usable URL instead of crashing.
+function listenWithFallback(port: number, attemptsLeft: number) {
+  const server = app.listen(port, HOST, () => {
+    const url = `http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${port}`;
+    if (port !== PORT) {
+      console.log(`Port ${PORT} was busy, using ${port} instead.`);
+    }
+    announce(url);
+    if (process.env.DND_OPEN_BROWSER === "1") {
+      openInBrowser(url);
+    }
+  });
+
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
+      listenWithFallback(port + 1, attemptsLeft - 1);
+      return;
+    }
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `Ports ${PORT}-${PORT + MAX_PORT_ATTEMPTS} are all in use. Set PORT to choose another.`
+      );
+    } else {
+      console.error("Server failed to start:", err.message);
+    }
+    process.exit(1);
   });
 }
 
