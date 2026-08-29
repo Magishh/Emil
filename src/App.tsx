@@ -10,6 +10,7 @@ import {
   InventoryItem,
   StatusEffect,
   LocationInfo,
+  InventoryItem as InventoryItemType,
 } from './types';
 import {
   PRESET_HEROES,
@@ -19,6 +20,9 @@ import {
   getAbilityModifier,
 } from './utils/diceUtils';
 import { soundEngine } from './utils/audio';
+import { CombatPanel, CombatAction } from './components/CombatPanel';
+import { startCombat, heroAction, enemyTurn, deathSaveStep, CombatOutcome } from './utils/combat';
+import { conditionEffects, resolveCheck, shortRest, longRest, applyLevelUps } from './utils/rules';
 import { SceneryView } from './components/SceneryView';
 import { StoryLogView } from './components/StoryLogView';
 import { CharacterSheet } from './components/CharacterSheet';
@@ -519,7 +523,20 @@ export default function App() {
         turnCount: prev.turnCount + 1,
         inCombat: Boolean(data.inCombat),
         combatEnemy: data.combatEnemy || undefined,
+        // Open a turn-based encounter when the DM introduces a foe, and clear
+        // any finished one so its panel does not linger.
+        combat:
+          data.inCombat && data.combatEnemy
+            ? prev.combat && prev.combat.enemy.name === data.combatEnemy.name && prev.combat.phase !== 'won'
+              ? prev.combat
+              : startCombat(applyCharacterUpdates(prev.character), data.combatEnemy)
+            : null,
       }));
+
+      // A new encounter must not open behind the dice arena.
+      if (data.inCombat && data.combatEnemy) {
+        setIsDiceArenaOpen(false);
+      }
 
       // Automatically generate a new scenery picture ONLY when a big scene change happens or if no initial scenery exists
       if (finalLocation && (isMajorSceneChange || !finalLocation.sceneryImageUrl)) {
@@ -598,39 +615,162 @@ export default function App() {
     }
   };
 
+  // ----------------------------------------------------------------
+  // Turn-based combat
+  // ----------------------------------------------------------------
+
+  const [isResolvingCombat, setIsResolvingCombat] = useState(false);
+
+  // Once an encounter ends, hand the outcome to the Dungeon Master so it
+  // narrates the aftermath and moves the story on.
+  const concludeCombat = (outcome: CombatOutcome) => {
+    if (outcome.outcome === 'won') soundEngine.playVictory();
+    else if (outcome.outcome === 'lost') soundEngine.playCriticalFumble();
+
+    setCampaign((prev) => ({
+      ...prev,
+      inCombat: false,
+      combatEnemy: undefined,
+      history: [
+        ...prev.history,
+        {
+          id: `combat-${Date.now()}`,
+          timestamp: Date.now(),
+          type: 'combat',
+          content: outcome.summary,
+          speaker: 'Combat',
+        },
+      ],
+    }));
+
+    // Let the panel's final state be seen before the story continues.
+    window.setTimeout(() => {
+      processTurn(outcome.summary);
+      setCampaign((prev) => ({ ...prev, combat: null }));
+    }, 1400);
+  };
+
+  const handleCombatAction = (action: CombatAction, item?: InventoryItemType) => {
+    if (isResolvingCombat) return;
+    soundEngine.playDiceRoll();
+
+    let finished: CombatOutcome | undefined;
+    let goToEnemy = false;
+
+    setCampaign((prev) => {
+      if (!prev.combat) return prev;
+      const step = heroAction(prev.character, prev.combat, action, item);
+      finished = step.ended;
+      goToEnemy = !step.ended && step.combat.phase === 'enemy';
+      return { ...prev, character: step.character, combat: step.combat };
+    });
+
+    if (finished) concludeCombat(finished);
+    void goToEnemy; // the enemy turn is driven by the effect below
+  };
+
+  const handleDeathSave = () => {
+    if (isResolvingCombat) return;
+    soundEngine.playDiceRoll();
+
+    let finished: CombatOutcome | undefined;
+    let goToEnemy = false;
+
+    setCampaign((prev) => {
+      if (!prev.combat) return prev;
+      const step = deathSaveStep(prev.character, prev.combat);
+      finished = step.ended;
+      goToEnemy = !step.ended && step.combat.phase === 'enemy';
+      return { ...prev, character: step.character, combat: step.combat };
+    });
+
+    if (finished) concludeCombat(finished);
+    void goToEnemy;
+  };
+
+  // Drives the enemy's turn whenever the encounter is waiting on it. Using an
+  // effect rather than calling it after each hero action also covers the case
+  // where the enemy wins initiative and acts first.
+  useEffect(() => {
+    const combat = campaign.combat;
+    if (!combat || combat.phase !== 'enemy' || isResolvingCombat) return;
+
+    setIsResolvingCombat(true);
+    const timer = window.setTimeout(() => {
+      let finished: CombatOutcome | undefined;
+      setCampaign((prev) => {
+        if (!prev.combat || prev.combat.phase !== 'enemy') return prev;
+        const step = enemyTurn(prev.character, prev.combat);
+        finished = step.ended;
+        return { ...prev, character: step.character, combat: step.combat };
+      });
+      soundEngine.playSwordStrike();
+      setIsResolvingCombat(false);
+      if (finished) concludeCombat(finished);
+    }, 750);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign.combat?.phase, campaign.combat?.round]);
+
+  // ----------------------------------------------------------------
+  // Rests
+  // ----------------------------------------------------------------
+
+  const handleRest = (kind: 'short' | 'long') => {
+    if (campaign.combat) return;
+    soundEngine.playHeal();
+
+    setCampaign((prev) => {
+      const result = kind === 'short' ? shortRest(prev.character) : longRest(prev.character);
+      return {
+        ...prev,
+        character: result.character,
+        history: [
+          ...prev.history,
+          {
+            id: `rest-${Date.now()}`,
+            timestamp: Date.now(),
+            type: 'system',
+            content: `\u{1F3D5} ${result.message}`,
+            speaker: 'Rest',
+          },
+        ],
+      };
+    });
+  };
+
   // Choice button clicked
   const handleSelectChoice = (choice: StoryChoice) => {
     if (choice.check) {
-      // If choice has a required check, set pending check and roll d20
-      const ability = choice.check.ability;
-      const mod = getAbilityModifier(
-        campaign.character.stats[ability.toLowerCase() as keyof typeof campaign.character.stats]
-      );
       setCampaign((prev) => ({
         ...prev,
         pendingCheck: choice.check!,
         pendingActionDescription: choice.label,
       }));
 
-      const rollBase = Math.floor(Math.random() * 20) + 1;
-      const isCrit = rollBase === 20;
-      const isFumble = rollBase === 1;
-      const total = rollBase + mod;
-      const success = isCrit ? true : isFumble ? false : total >= choice.check.dc;
+      // Resolved through the rules engine, so active conditions genuinely apply
+      // advantage, disadvantage and bonus dice to the roll.
+      const resolved = resolveCheck({
+        character: campaign.character,
+        ability: choice.check.ability,
+        dc: choice.check.dc,
+      });
 
-      // Trigger automatic roll or prompt in dice arena
       const activeDieRoll: ActiveDiceRoll = {
         id: `roll-${Date.now()}`,
         dieType: 'd20',
-        baseRoll: rollBase,
-        modifier: mod,
-        total,
+        baseRoll: resolved.natural,
+        modifier: resolved.total - resolved.natural,
+        total: resolved.total,
         dc: choice.check.dc,
         purpose: `${choice.check.skillName || choice.check.ability} Check: ${choice.label}`,
         timestamp: Date.now(),
-        isCritical: isCrit,
-        isFumble,
-        success,
+        isCritical: resolved.isCritical,
+        isFumble: resolved.isFumble,
+        success: resolved.success,
+        rollMode: resolved.mode,
+        breakdown: resolved.breakdown,
       };
 
       setActiveRoll(activeDieRoll);
@@ -649,13 +789,12 @@ export default function App() {
 
   // Trigger stat roll directly from character sheet
   const handleTriggerStatRoll = (ability: Ability, label: string) => {
-    const mod = getAbilityModifier(
-      campaign.character.stats[ability.toLowerCase() as keyof typeof campaign.character.stats]
-    );
-    const rollBase = Math.floor(Math.random() * 20) + 1;
-    const total = rollBase + mod;
-    const isCrit = rollBase === 20;
-    const isFumble = rollBase === 1;
+    const resolved = resolveCheck({ character: campaign.character, ability });
+    const rollBase = resolved.natural;
+    const mod = resolved.total - resolved.natural;
+    const total = resolved.total;
+    const isCrit = resolved.isCritical;
+    const isFumble = resolved.isFumble;
 
     const newRoll: ActiveDiceRoll = {
       id: `roll-${Date.now()}`,
@@ -667,6 +806,8 @@ export default function App() {
       isFumble,
       purpose: label,
       timestamp: Date.now(),
+      rollMode: resolved.mode,
+      breakdown: resolved.breakdown,
     };
 
     setActiveRoll(newRoll);
@@ -1028,6 +1169,26 @@ export default function App() {
             <span className="hidden sm:inline">Perchance AI</span>
           </button>
 
+          {/* Rest Controls */}
+          <div className="hidden sm:flex items-center gap-1 bg-white dark:bg-[#1e293b] border border-[#e2dcc5] dark:border-[#334155] rounded-lg p-0.5 shadow-xs">
+            <button
+              onClick={() => handleRest('short')}
+              disabled={Boolean(campaign.combat)}
+              title="Short rest: spend a hit die to recover hit points"
+              className="px-2 py-1 rounded-md text-[11px] font-serif font-bold text-[#2c1810] dark:text-[#f8fafc] hover:bg-[#f5f0e3] dark:hover:bg-[#283548] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default"
+            >
+              Short Rest
+            </button>
+            <button
+              onClick={() => handleRest('long')}
+              disabled={Boolean(campaign.combat)}
+              title="Long rest: full hit points, hit dice recovered, timed conditions lapse"
+              className="px-2 py-1 rounded-md text-[11px] font-serif font-bold text-[#2c1810] dark:text-[#f8fafc] hover:bg-[#f5f0e3] dark:hover:bg-[#283548] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default"
+            >
+              Long Rest
+            </button>
+          </div>
+
           {/* Sound Toggle */}
           <button
             onClick={handleToggleSound}
@@ -1178,6 +1339,19 @@ export default function App() {
         </div>
       </main>
 
+      {/* Active encounter: the choice buttons give way to combat actions. */}
+      {campaign.combat && campaign.combat.phase !== 'won' && campaign.combat.phase !== 'fled' && (
+        <div className="shrink-0 px-2.5 sm:px-3.5 pb-2 max-h-[46vh] overflow-y-auto">
+          <CombatPanel
+            combat={campaign.combat}
+            character={campaign.character}
+            onAction={handleCombatAction}
+            onRollDeathSave={handleDeathSave}
+            isResolving={isResolvingCombat}
+          />
+        </div>
+      )}
+
       {/* BOTTOM ACTION BAR: 4 Procedural Choice Buttons + Custom Player Text Input */}
       <footer className="shrink-0">
         <ActionBar
@@ -1185,7 +1359,7 @@ export default function App() {
           onSelectChoice={handleSelectChoice}
           onCustomAction={handleCustomAction}
           onQuickRoll={handleQuickRoll}
-          isLoading={isLoading}
+          isLoading={isLoading || Boolean(campaign.combat && campaign.combat.phase !== 'won')}
         />
       </footer>
 

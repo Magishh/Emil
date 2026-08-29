@@ -366,7 +366,8 @@ CRITICAL STORYTELLING INSTRUCTIONS:
 3. VISCERAL OUTCOMES: Describe the tangible consequences of the player's action or roll in gripping, cinematic detail. Factor in any active status effects (e.g. Poisoned, Blessed, Charmed, Hasted).
 4. PACING: Let the narrative breathe and build suspense naturally before reaching the moment where a crucial new decision is needed.
 5. CHOICES: Generate 4 creative, tactical, distinctly different player choices for the next step. If loot was found, specify newItem or goldChange. If the player took damage, specify hpChange (negative number for damage scaled to difficulty, positive for healing). If a condition was applied or removed (e.g. spider venom causing Poisoned, or receiving a holy Blessing), specify addedStatusEffects or removedStatusEffectIds.
-6. SCENE CONTINUITY & LOCATION PERSISTENCE:
+6. COMBAT: When a fight begins, set "inCombat" to true and provide "combatEnemy" with full statistics (hp, maxHp, ac, attackBonus, damageNotation, xpValue). The game resolves the fight turn by turn using 5e rules - attack rolls, damage, death saving throws - so give the creature stats appropriate to its threat and to the party level, and describe it vividly rather than narrating the blow-by-blow yourself. Set "inCombat" false once no enemy is present.
+7. SCENE CONTINUITY & LOCATION PERSISTENCE:
 - The hero is currently in: "${currentLocation?.name || 'Current Scene'}" (${currentLocation?.region || 'Current Region'}).
 - If the player's action takes place within the SAME environment, room, or building (e.g., browsing library shelves, speaking to a patron at the tavern bar, examining a chest, combat in the hallway), KEEP the location name, region, and atmosphere identical to "${currentLocation?.name || 'Current Scene'}", and set "isMajorSceneChange" to false.
 - ONLY change the location and set "isMajorSceneChange" to true when a BIG, DISTINCT SCENE CHANGE occurs (such as exiting the library and walking into the tavern, leaving the catacombs for the mountain pass, or journeying to an entirely new district or dungeon level).`;
@@ -481,9 +482,22 @@ CRITICAL STORYTELLING INSTRUCTIONS:
               name: { type: Type.STRING },
               hp: { type: Type.INTEGER },
               maxHp: { type: Type.INTEGER },
-              ac: { type: Type.INTEGER },
-              description: { type: Type.STRING }
-            }
+              ac: { type: Type.INTEGER, description: "Armour Class, typically 10-18." },
+              description: { type: Type.STRING },
+              attackBonus: {
+                type: Type.INTEGER,
+                description: "Added to the enemy's d20 attack rolls, typically +2 to +8."
+              },
+              damageNotation: {
+                type: Type.STRING,
+                description: "Dice notation for its damage, e.g. \"1d8+2\" or \"2d6\"."
+              },
+              xpValue: {
+                type: Type.INTEGER,
+                description: "XP awarded for defeating it (5e budget: ~50 for a weak foe, 450 for a tough one, 1800+ for a boss)."
+              }
+            },
+            required: ["name", "hp", "maxHp", "ac", "description"]
           }
         },
         required: ["narrative", "location", "choices"]

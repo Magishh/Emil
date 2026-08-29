@@ -82,6 +82,18 @@ export interface CustomClass {
   isCustom?: boolean;
 }
 
+export interface DeathSaves {
+  successes: number;
+  failures: number;
+}
+
+export interface HitDicePool {
+  /** Die size, e.g. 10 for a d10 class. */
+  die: number;
+  total: number;
+  remaining: number;
+}
+
 export interface Character {
   name: string;
   race: string;
@@ -104,6 +116,12 @@ export interface Character {
   alignment: string;
   spellSlots?: { current: number; max: number; level: number }[];
   statusEffects?: StatusEffect[];
+  /** Death saving throws accumulated while at 0 hit points. */
+  deathSaves?: DeathSaves;
+  /** Hit dice available to spend on a short rest. */
+  hitDice?: HitDicePool;
+  /** Set once the character has died. */
+  isDead?: boolean;
 }
 
 export interface SkillCheckRequirement {
@@ -150,6 +168,43 @@ export interface LocationInfo {
   sceneryImageUrl?: string;
 }
 
+export interface CombatEnemy {
+  name: string;
+  hp: number;
+  maxHp: number;
+  ac: number;
+  description: string;
+  /** Added to the enemy's attack rolls. */
+  attackBonus?: number;
+  /** Dice notation for the enemy's damage, e.g. "1d8+2". */
+  damageNotation?: string;
+  /** XP awarded for defeating it; derived from HP and AC when absent. */
+  xpValue?: number;
+  portraitPrompt?: string;
+}
+
+export type CombatPhase = 'hero' | 'enemy' | 'won' | 'lost' | 'fled';
+
+export interface CombatState {
+  enemy: CombatEnemy;
+  round: number;
+  phase: CombatPhase;
+  /** Whether the hero won initiative this encounter. */
+  heroActsFirst: boolean;
+  /** Set when the hero took a defensive stance, raising AC for one attack. */
+  heroDefending?: boolean;
+  log: CombatLogEntry[];
+}
+
+export interface CombatLogEntry {
+  id: string;
+  side: 'hero' | 'enemy' | 'system';
+  text: string;
+  detail?: string;
+  damage?: number;
+  critical?: boolean;
+}
+
 export interface CampaignState {
   campaignId: string;
   campaignTitle: string;
@@ -163,18 +218,16 @@ export interface CampaignState {
   history: StoryLogEntry[];
   turnCount: number;
   inCombat: boolean;
-  combatEnemy?: {
-    name: string;
-    hp: number;
-    maxHp: number;
-    ac: number;
-    description: string;
-  };
+  combatEnemy?: CombatEnemy;
+  /** Turn-based combat bookkeeping while an encounter is running. */
+  combat?: CombatState | null;
   createdAt?: number;
   updatedAt?: number;
 }
 
 export type DieType = 'd4' | 'd6' | 'd8' | 'd10' | 'd12' | 'd20' | 'd100';
+
+export type DiceRollMode = 'normal' | 'advantage' | 'disadvantage';
 
 export interface ActiveDiceRoll {
   id: string;
@@ -189,6 +242,10 @@ export interface ActiveDiceRoll {
   purpose: string;
   timestamp: number;
   diceCount?: number;
+  /** Set when conditions forced advantage or disadvantage. */
+  rollMode?: DiceRollMode;
+  /** Human-readable maths behind the total. */
+  breakdown?: string[];
 }
 
 export interface StoryHeroConcept {

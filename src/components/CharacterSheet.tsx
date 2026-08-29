@@ -4,6 +4,7 @@ import { getAbilityModifier, formatModifier, getItemThumbnail, PRESET_CONDITIONS
 import { generateCharacterAvatarSvg } from '../utils/svgArt';
 import { soundEngine } from '../utils/audio';
 import { ItemSprite, PortraitSprite } from './Sprite';
+import { xpForNextLevel, xpProgress, proficiencyBonus, defaultHitDice } from '../utils/rules';
 import { ItemDetailsModal } from './ItemDetailsModal';
 import { BodyStatusVisual } from './BodyStatusVisual';
 import {
@@ -127,6 +128,13 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
         return <Sparkles className={className} />;
     }
   };
+
+  // Progression readouts
+  const currentXp = character.xp || 0;
+  const nextLevelXp = xpForNextLevel(character.level);
+  const xpPct = xpProgress(currentXp, character.level);
+  const profBonus = proficiencyBonus(character.level);
+  const hitDice = defaultHitDice(character);
 
   // HP Math (guard against a zero maxHp, which would render a NaN width)
   const safeMaxHp = Math.max(1, character.maxHp || 0);
@@ -470,6 +478,37 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
             className="h-full bg-gradient-to-r from-[#8b2b2b] to-[#c94c4c] shadow-[0_0_10px_rgba(201,76,76,0.4)] transition-all duration-500 rounded-full"
             style={{ width: `${hpPercent}%` }}
           />
+        </div>
+
+        {/* Experience toward the next level */}
+        <div className="mt-2 space-y-1">
+          <div className="flex items-center justify-between text-[10px] font-mono text-[#b8ae8f]">
+            <span className="uppercase tracking-wider font-bold">Experience</span>
+            <span>
+              {nextLevelXp === null
+                ? `${currentXp.toLocaleString()} XP · max level`
+                : `${currentXp.toLocaleString()} / ${nextLevelXp.toLocaleString()} XP`}
+            </span>
+          </div>
+          <div
+            className="h-1.5 w-full bg-black/50 rounded-full border border-[#4a3227] overflow-hidden"
+            title={
+              nextLevelXp === null
+                ? 'Maximum level reached'
+                : `${(nextLevelXp - currentXp).toLocaleString()} XP to level ${character.level + 1}`
+            }
+          >
+            <div
+              className="h-full bg-gradient-to-r from-amber-600 to-amber-300 transition-all duration-500 rounded-full"
+              style={{ width: `${xpPct * 100}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] font-mono text-[#8c7e6a]">
+            <span>Proficiency +{profBonus}</span>
+            <span>
+              Hit dice {hitDice.remaining}/{hitDice.total} d{hitDice.die}
+            </span>
+          </div>
         </div>
       </div>
 
