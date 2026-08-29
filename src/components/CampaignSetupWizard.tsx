@@ -75,9 +75,11 @@ export function CampaignSetupWizard({
   // STEP 1: Story Prompt & Narrative Genesis
   // ----------------------------------------------------
   const [storyPremise, setStoryPremise] = useState<string>(STORY_REALM_PRESETS[0].premise);
-  const [promptTone, setPromptTone] = useState<string>('Freeform & Story-Native');
-  const [promptFocus, setPromptFocus] = useState<string>('Freeform Narrative');
-  const [promptPacing, setPromptPacing] = useState<string>('Story-Driven & Flexible');
+  // Tone, focus and pacing used to be dropdowns. They are now inferred from the
+  // premise itself, so the step is just: write your story, then synthesise.
+  const promptTone = 'Freeform & Story-Native';
+  const promptFocus = 'Freeform Narrative';
+  const promptPacing = 'Story-Driven & Flexible';
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState<boolean>(false);
   const [isSynthesized, setIsSynthesized] = useState<boolean>(false);
 
@@ -204,9 +206,6 @@ export function CampaignSetupWizard({
   const handleSelectInspirationSpark = (spark: typeof PROMPT_INSPIRATION_SPARKS[0]) => {
     soundEngine.playDiceRoll();
     setStoryPremise(spark.prompt);
-    setPromptTone(spark.tone);
-    setPromptFocus(spark.focus);
-    setPromptPacing(spark.pacing);
     setSelectedRealmId('custom');
     setIsSynthesized(false);
   };
@@ -779,12 +778,6 @@ export function CampaignSetupWizard({
             <WizardStep1Story
               storyPremise={storyPremise}
               setStoryPremise={setStoryPremise}
-              promptTone={promptTone}
-              setPromptTone={setPromptTone}
-              promptFocus={promptFocus}
-              setPromptFocus={setPromptFocus}
-              promptPacing={promptPacing}
-              setPromptPacing={setPromptPacing}
               isEnhancingPrompt={isEnhancingPrompt}
               onEnhanceAndSynthesize={handleEnhancePromptAndSynthesizeCampaign}
               isSynthesized={isSynthesized}

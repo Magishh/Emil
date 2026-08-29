@@ -51,12 +51,6 @@ export const PROMPT_INSPIRATION_SPARKS = [
 interface WizardStep1StoryProps {
   storyPremise: string;
   setStoryPremise: (premise: string) => void;
-  promptTone: string;
-  setPromptTone: (tone: string) => void;
-  promptFocus: string;
-  setPromptFocus: (focus: string) => void;
-  promptPacing: string;
-  setPromptPacing: (pacing: string) => void;
   isEnhancingPrompt: boolean;
   onEnhanceAndSynthesize: () => void;
   isSynthesized: boolean;
@@ -73,12 +67,6 @@ interface WizardStep1StoryProps {
 export function WizardStep1Story({
   storyPremise,
   setStoryPremise,
-  promptTone,
-  setPromptTone,
-  promptFocus,
-  setPromptFocus,
-  promptPacing,
-  setPromptPacing,
   isEnhancingPrompt,
   onEnhanceAndSynthesize,
   isSynthesized,
@@ -223,63 +211,6 @@ export function WizardStep1Story({
               ✨ Freeform input — no rigid prefix variables or mandatory templates
             </span>
             <span>{storyPremise.length} characters</span>
-          </div>
-        </div>
-
-        {/* 3. Narrative Directives Controls (Tone, Focus, Pacing) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 block mb-1">
-              Setting Atmosphere / Tone:
-            </label>
-            <select
-              value={promptTone}
-              onChange={(e) => setPromptTone(e.target.value)}
-              className="w-full px-3 py-2 bg-[#090f1a] border border-[#273752] rounded-xl text-xs text-slate-200 focus:ring-1 focus:ring-amber-400"
-            >
-              <option value="Freeform & Story-Native">Freeform & Story-Native</option>
-              <option value="Sunken Abyssal Ruins">Sunken Abyssal Ruins</option>
-              <option value="Dark Gothic Horror">Dark Gothic Horror</option>
-              <option value="Epic High Fantasy">Epic High Fantasy</option>
-              <option value="Eldritch Mystery">Eldritch Mystery</option>
-              <option value="Arcanepunk Heist">Arcanepunk Heist</option>
-              <option value="Grim Survival">Grim Survival</option>
-              <option value="Mythic Ancient Legends">Mythic Ancient Legends</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 block mb-1">
-              Quest Objective Focus:
-            </label>
-            <select
-              value={promptFocus}
-              onChange={(e) => setPromptFocus(e.target.value)}
-              className="w-full px-3 py-2 bg-[#090f1a] border border-[#273752] rounded-xl text-xs text-slate-200 focus:ring-1 focus:ring-amber-400"
-            >
-              <option value="Freeform Narrative">Freeform Narrative</option>
-              <option value="Ancient Relic Hunt">Ancient Relic Hunt</option>
-              <option value="Boss Hunt & Nemesis Slaying">Boss Hunt & Nemesis Slaying</option>
-              <option value="Infiltration & Heist">Infiltration & Heist</option>
-              <option value="Curse Breaking & Mystery">Curse Breaking & Mystery</option>
-              <option value="Perilous Escape & Survival">Perilous Escape & Survival</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 block mb-1">
-              Adventure Pacing:
-            </label>
-            <select
-              value={promptPacing}
-              onChange={(e) => setPromptPacing(e.target.value)}
-              className="w-full px-3 py-2 bg-[#090f1a] border border-[#273752] rounded-xl text-xs text-slate-200 focus:ring-1 focus:ring-amber-400"
-            >
-              <option value="Story-Driven & Flexible">Story-Driven & Flexible</option>
-              <option value="Tactical & Deadly">Tactical & Deadly</option>
-              <option value="Heroic & Cinematic">Heroic & Cinematic</option>
-              <option value="Atmospheric & Immersive">Atmospheric & Immersive</option>
-            </select>
           </div>
         </div>
 
