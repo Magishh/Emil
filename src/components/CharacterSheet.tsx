@@ -3,6 +3,7 @@ import { Character, Ability, InventoryItem, StatusEffect, StatusEffectType } fro
 import { getAbilityModifier, formatModifier, getItemThumbnail, PRESET_CONDITIONS } from '../utils/diceUtils';
 import { generateCharacterAvatarSvg } from '../utils/svgArt';
 import { soundEngine } from '../utils/audio';
+import { ItemSprite, PortraitSprite } from './Sprite';
 import { ItemDetailsModal } from './ItemDetailsModal';
 import { BodyStatusVisual } from './BodyStatusVisual';
 import {
@@ -344,11 +345,8 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
       <div className="p-3.5 bg-[#24130d] dark:bg-[#080d18] border-b border-[#4a3227] dark:border-[#1e2d4a] flex items-center gap-3.5 sm:gap-4 shrink-0 transition-colors">
         {/* Character Portrait with AI Regenerate, Zoom & Quick Actions */}
         <div className="relative group shrink-0 w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-amber-400/80 dark:border-amber-400 bg-[#0f172a] shadow-lg ring-1 ring-amber-400/20">
-          <img
-            src={portraitSrc}
-            alt={character.name}
-            onError={() => setImgError(true)}
-            referrerPolicy="no-referrer"
+          <PortraitSprite
+            character={character}
             className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
           />
 
@@ -764,7 +762,6 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                   )}
 
                   {filteredInventory.map((item) => {
-                    const thumb = item.imageUrl || getItemThumbnail(item);
                     return (
                       <div
                         key={item.id}
@@ -781,15 +778,7 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
                       >
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <div className="relative shrink-0 w-8 h-8 rounded-lg overflow-hidden border border-white/15 bg-black/40 group-hover:border-amber-400 transition-colors">
-                            <img
-                              src={thumb}
-                              alt={item.name}
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = getItemThumbnail(item);
-                              }}
-                              className="w-full h-full object-cover"
-                            />
+                            <ItemSprite item={item} className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                               <Maximize2 className="w-3.5 h-3.5 text-amber-300" />
                             </div>

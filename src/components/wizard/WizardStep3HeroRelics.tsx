@@ -24,7 +24,7 @@ import {
 } from '../../types';
 import { STARTING_CLASSES, STARTING_RACES } from '../../utils/diceUtils';
 import { generateCharacterAvatarSvg } from '../../utils/svgArt';
-import { getFixedPerchanceItemImageUrl } from '../../utils/perchanceAi';
+import { ItemSprite } from '../Sprite';
 import { soundEngine } from '../../utils/audio';
 
 interface WizardStep3HeroRelicsProps {
@@ -445,15 +445,7 @@ export function WizardStep3HeroRelics({
                       className="relative w-12 h-12 rounded-lg overflow-hidden border border-amber-400/60 bg-[#090f1a] shrink-0 hover:scale-105 transition-transform cursor-pointer"
                       title="Inspect full image and statistics"
                     >
-                      <img
-                        src={item.imageUrl || getFixedPerchanceItemImageUrl(item)}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = getFixedPerchanceItemImageUrl(item);
-                        }}
-                      />
+                      <ItemSprite item={item} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <Eye className="w-4 h-4 text-amber-300" />
                       </div>
@@ -579,15 +571,7 @@ export function WizardStep3HeroRelics({
                   className="relative w-10 h-10 rounded-lg overflow-hidden border border-[#273752] bg-[#090f1a] shrink-0 hover:border-amber-400 cursor-pointer"
                   title="Inspect item"
                 >
-                  <img
-                    src={item.imageUrl || getFixedPerchanceItemImageUrl(item)}
-                    alt={item.name}
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = getFixedPerchanceItemImageUrl(item);
-                    }}
-                  />
+                  <ItemSprite item={item} className="w-full h-full object-cover" />
                 </button>
                 <div
                   className="overflow-hidden flex-1 cursor-pointer"

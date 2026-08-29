@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { InventoryItem } from '../types';
-import { getItemThumbnail } from '../utils/diceUtils';
+import { ItemSprite } from './Sprite';
 import { soundEngine } from '../utils/audio';
 import {
   Sparkles,
@@ -43,7 +43,6 @@ export const NewItemModal: React.FC<NewItemModalProps> = ({
 
   if (!isOpen || !item) return null;
 
-  const itemThumb = item.imageUrl || getItemThumbnail(item);
   const isWeapon = item.type === 'weapon';
   const isArmor = item.type === 'armor';
   const isPotion = item.type === 'potion';
@@ -141,15 +140,7 @@ export const NewItemModal: React.FC<NewItemModalProps> = ({
               }`}
               title="Click to enlarge image"
             >
-              <img
-                src={itemThumb}
-                alt={item.name}
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = getItemThumbnail(item);
-                }}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-              />
+              <ItemSprite item={item} className="w-full h-full object-cover" />
               <div className="absolute top-1 right-1 p-1 rounded-md bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
                 {isZoomed ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </div>

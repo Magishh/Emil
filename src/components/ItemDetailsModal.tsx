@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { InventoryItem } from '../types';
-import { getItemThumbnail } from '../utils/diceUtils';
+import { ItemSprite } from './Sprite';
 import { generatePerchanceImage, expandPromptWithGemini, buildPerchanceItemPrompt, getFixedPerchanceItemImageUrl } from '../utils/perchanceAi';
 import { soundEngine } from '../utils/audio';
 import {
@@ -162,13 +162,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
                 isZoomed ? 'w-full h-80 sm:h-96' : 'w-48 h-48 sm:w-56 sm:h-56'
               }`}
             >
-              <img
-                src={itemThumb}
-                alt={item.name}
-                referrerPolicy="no-referrer"
-                onError={() => setImgError(true)}
-                className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
-              />
+              <ItemSprite item={item} className="w-full h-full object-cover" />
 
               {/* Top Zoom Toggle button */}
               <button

@@ -722,7 +722,16 @@ app.post("/api/perchance/generate", async (req, res) => {
     stylePreset = "cinematic-fantasy",
     negativePrompt,
     seed,
+    width,
+    height,
   } = req.body || {};
+
+  // Sprites are rendered small; generating them small keeps the client-side
+  // artwork cache a fraction of the size.
+  const requestedSize = {
+    width: Math.max(64, Math.min(1024, Number(width) || 512)),
+    height: Math.max(64, Math.min(1024, Number(height) || 512)),
+  };
 
   const inputToUse = prompt || userInput;
   if (!inputToUse || typeof inputToUse !== "string" || !inputToUse.trim()) {
@@ -797,7 +806,7 @@ app.post("/api/perchance/generate", async (req, res) => {
   }
 
   // Fallback: Free AI or Direct Perchance URL
-  const freeImg = await fetchFreeAiImage(finalDetailedPrompt, "flux");
+  const freeImg = await fetchFreeAiImage(finalDetailedPrompt, "flux", requestedSize);
   return res.json({
     imageUrl: freeImg || directPerchanceUrl,
     perchanceApiUrl: directPerchanceUrl,
@@ -812,7 +821,11 @@ app.post("/api/perchance/generate", async (req, res) => {
 });
 
 // Free AI Image Generation Helper (Flux / Turbo / Realism with multi-tier retry, dynamic seed, and prompt sanitization)
-async function fetchFreeAiImage(rawPrompt: string, model: string = "flux"): Promise<string | null> {
+async function fetchFreeAiImage(
+  rawPrompt: string,
+  model: string = "flux",
+  size: { width: number; height: number } = { width: 512, height: 512 }
+): Promise<string | null> {
   // Sanitize and trim prompt to prevent HTTP 414 URI Too Long and special char encoding failures
   const cleanPrompt = rawPrompt
     .replace(/["'{}\[\]\\\/]/g, ' ')
@@ -830,7 +843,7 @@ async function fetchFreeAiImage(rawPrompt: string, model: string = "flux"): Prom
   for (const m of modelsToTry) {
     try {
       const dynamicSeed = Math.floor(Math.random() * 90000000) + 10000000;
-      const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=512&height=512&model=${m}&seed=${dynamicSeed}&nologo=true&enhance=true`;
+      const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=${size.width}&height=${size.height}&model=${m}&seed=${dynamicSeed}&nologo=true&enhance=true`;
 
       const res = await fetch(url, {
         signal: AbortSignal.timeout(6500),
@@ -853,7 +866,7 @@ async function fetchFreeAiImage(rawPrompt: string, model: string = "flux"): Prom
 
   // Fallback: return direct dynamic URL with unique seed so browser image loader fetches it directly
   const fallbackSeed = Math.floor(Math.random() * 90000000) + 10000000;
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=512&height=512&model=flux&seed=${fallbackSeed}&nologo=true`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=${size.width}&height=${size.height}&model=flux&seed=${fallbackSeed}&nologo=true`;
 }
 
 // Curated fantasy portraits fallback map (multiple distinct portraits per class)
