@@ -23,6 +23,8 @@ import { soundEngine } from './utils/audio';
 import { CombatPanel, CombatAction } from './components/CombatPanel';
 import { startCombat, heroAction, enemyTurn, deathSaveStep, CombatOutcome } from './utils/combat';
 import { conditionEffects, resolveCheck, shortRest, longRest, applyLevelUps } from './utils/rules';
+import { JournalModal } from './components/JournalModal';
+import { applyWorldUpdates, summariseWorldForDm, ensureWorld } from './utils/worldState';
 import { SceneryView } from './components/SceneryView';
 import { StoryLogView } from './components/StoryLogView';
 import { CharacterSheet } from './components/CharacterSheet';
@@ -150,11 +152,14 @@ export default function App() {
   const [isMusicPlayerOpen, setIsMusicPlayerOpen] = useState(false);
   const [musicState, setMusicState] = useState(() => soundEngine.getPlaybackState());
   const [isNarratorModalOpen, setIsNarratorModalOpen] = useState(false);
+  const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [narratorPlayback, setNarratorPlayback] = useState(() => narratorEngine.getState());
   const [isDiceArenaOpen, setIsDiceArenaOpen] = useState(false);
   // Mute is owned by the sound engine so the header and the Ambience Studio
   // never disagree about it.
   const soundEnabled = musicState.soundEnabled;
+
+  const activeQuestCount = ensureWorld(campaign.world).quests.filter((q) => q.status === 'active').length;
 
   // Subscribe to background music engine
   useEffect(() => {
@@ -353,6 +358,7 @@ export default function App() {
         inCombat: campaign.inCombat,
         combatEnemy: campaign.combatEnemy,
         settings: campaign.settings,
+        worldSummary: summariseWorldForDm(campaign.world),
       };
 
       const res = await fetch('/api/campaign/next', {
@@ -519,6 +525,7 @@ export default function App() {
         choices: data.choices || prev.choices,
         pendingCheck: data.pendingCheck || null,
         pendingActionDescription: null,
+        world: applyWorldUpdates(prev.world, data.worldUpdates, prev.turnCount + 1),
         history: [...prev.history, newHistoryEntry],
         turnCount: prev.turnCount + 1,
         inCombat: Boolean(data.inCombat),
@@ -1109,6 +1116,21 @@ export default function App() {
             <span className="hidden sm:inline">Quests</span>
           </button>
 
+          {/* Campaign Journal Button */}
+          <button
+            onClick={() => setIsJournalOpen(true)}
+            title="Campaign Journal: quests, characters met, and faction standing"
+            className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-white dark:bg-[#1e293b] hover:bg-[#f5f0e3] dark:hover:bg-[#283548] text-[#2c1810] dark:text-[#f8fafc] border border-[#e2dcc5] dark:border-[#334155] transition-all flex items-center gap-1.5 text-xs font-serif font-bold shadow-xs cursor-pointer relative"
+          >
+            <Scroll className="w-3.5 h-3.5 text-[#8c7e6a] dark:text-amber-400" />
+            <span className="hidden sm:inline">Journal</span>
+            {activeQuestCount > 0 && (
+              <span className="text-[10px] font-mono px-1 rounded bg-amber-500 text-slate-950 font-bold">
+                {activeQuestCount}
+              </span>
+            )}
+          </button>
+
           {/* Campaign Ambience Studio Button */}
           <button
             onClick={() => setIsMusicPlayerOpen(true)}
@@ -1554,6 +1576,13 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* Campaign Journal */}
+      <JournalModal
+        isOpen={isJournalOpen}
+        onClose={() => setIsJournalOpen(false)}
+        world={campaign.world}
+      />
 
       {/* AI Narrator / TTS Voice & Speed Tuning Modal */}
       <NarratorModal

@@ -1,4 +1,5 @@
 import { CampaignState } from '../types';
+import { ensureWorld } from './worldState';
 import { PRESET_HEROES, INITIAL_LOCATION, INITIAL_STORY, INITIAL_CHOICES } from './diceUtils';
 import { getFixedPerchanceItemImageUrl } from './perchanceAi';
 
@@ -261,6 +262,9 @@ export function sanitizeCampaignState(raw: any): CampaignState {
     turnCount: typeof raw?.turnCount === 'number' ? raw.turnCount : 1,
     inCombat: Boolean(raw?.inCombat),
     combatEnemy: raw?.combatEnemy || undefined,
+    // A restored save must not carry a half-finished encounter.
+    combat: null,
+    world: ensureWorld(raw?.world),
     createdAt: typeof raw?.createdAt === 'number' ? raw.createdAt : Date.now(),
     updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
   };

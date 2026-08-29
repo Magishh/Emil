@@ -13,7 +13,7 @@
 // ============================================================================
 
 import { getFixedPerchanceItemImageUrl, buildPerchanceItemPrompt } from './perchanceAi';
-import { generateItemThumbnailSvg, generateCharacterAvatarSvg } from './svgArt';
+import { generateItemThumbnailSvg, generateCharacterAvatarSvg, generateScenerySvg } from './svgArt';
 
 const DB_NAME = 'dnd_sprite_cache';
 const DB_VERSION = 1;
@@ -22,7 +22,7 @@ const STORE = 'sprites';
 /** Concurrent generations. Kept low so a full inventory does not stampede. */
 const MAX_CONCURRENT = 2;
 
-export type SpriteKind = 'item' | 'portrait';
+export type SpriteKind = 'item' | 'portrait' | 'scenery';
 
 export interface SpriteSubject {
   name?: string;
@@ -36,6 +36,9 @@ export interface SpriteSubject {
   className?: string;
   race?: string;
   portraitPrompt?: string;
+  /** Scenery only. */
+  atmosphere?: string;
+  sceneryPrompt?: string;
 }
 
 /**
@@ -51,6 +54,15 @@ export function isPlaceholderArtwork(url?: string): boolean {
 
 /** Stable identity for a subject, so the same item always reuses its artwork. */
 export function spriteKey(kind: SpriteKind, subject: SpriteSubject): string {
+  if (kind === 'scenery') {
+    // Keyed on the prompt as well as the name, so a location that changes mood
+    // (a hall before and after the fire) gets its own artwork.
+    return [
+      'scenery',
+      (subject.name || 'place').toLowerCase().trim(),
+      (subject.sceneryPrompt || subject.atmosphere || '').toLowerCase().trim().slice(0, 120),
+    ].join('|');
+  }
   if (kind === 'portrait') {
     return [
       'portrait',
@@ -232,7 +244,11 @@ class SpriteStore {
 
   private async generate(key: string, kind: SpriteKind, subject: SpriteSubject) {
     const prompt =
-      kind === 'portrait'
+      kind === 'scenery'
+        ? `${subject.sceneryPrompt || subject.atmosphere || subject.name}, ` +
+          `atmospheric high fantasy landscape concept art, panoramic composition, ` +
+          `dramatic lighting, no characters, no text`
+        : kind === 'portrait'
         ? subject.portraitPrompt ||
           `Masterpiece high fantasy character portrait of ${subject.name || 'a hero'}, ` +
             `a ${subject.race || 'human'} ${subject.className || 'adventurer'}, ` +
@@ -246,11 +262,11 @@ class SpriteStore {
         body: JSON.stringify({
           prompt,
           expandWithGemini: false,
-          aspectRatio: '1:1',
+          aspectRatio: kind === 'scenery' ? '16:9' : '1:1',
           stylePreset: 'cinematic-fantasy',
           // Sprites are shown small; keeping them small keeps the cache light.
-          width: kind === 'portrait' ? 384 : 256,
-          height: kind === 'portrait' ? 384 : 256,
+          width: kind === 'scenery' ? 640 : kind === 'portrait' ? 384 : 256,
+          height: kind === 'scenery' ? 360 : kind === 'portrait' ? 384 : 256,
         }),
         signal: AbortSignal.timeout(45000),
       });
@@ -280,6 +296,9 @@ export const spriteStore = new SpriteStore();
 
 /** Procedural stand-in shown until generated artwork arrives. */
 export function placeholderArtwork(kind: SpriteKind, subject: SpriteSubject): string {
+  if (kind === 'scenery') {
+    return generateScenerySvg(subject.sceneryPrompt || subject.atmosphere || '', subject.name || 'Unknown Place');
+  }
   return kind === 'portrait'
     ? generateCharacterAvatarSvg({
         name: subject.name,

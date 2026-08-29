@@ -256,7 +256,7 @@ ${ruleStrictness === 'none' ? 'Note: Since this is No Rules / Narrative mode, do
 
 // Campaign Next Turn AI DM Endpoint
 app.post("/api/campaign/next", async (req, res) => {
-  const { character, action, rollDetails, history, currentLocation, inCombat, combatEnemy, settings } = req.body || {};
+  const { character, action, rollDetails, history, currentLocation, inCombat, combatEnemy, settings, worldSummary } = req.body || {};
   const ruleStrictness = settings?.ruleStrictness || 'soft';
   const difficulty = settings?.difficulty || 'standard';
   const storyPremise = settings?.storyPremise || '';
@@ -355,6 +355,8 @@ Current Location: ${currentLocation?.name || 'Ancient Ruins'} (${currentLocation
 Recent Campaign Context:
 ${recentHistoryText || 'The hero just embarked on their quest.'}
 
+${worldSummary ? `ESTABLISHED WORLD STATE - honour every line of this. Reuse these characters by name with their existing attitude, keep quest progress consistent, and never bring the dead back:\n${worldSummary}` : ''}
+
 The player took this action:
 "${action}"
 
@@ -367,7 +369,12 @@ CRITICAL STORYTELLING INSTRUCTIONS:
 4. PACING: Let the narrative breathe and build suspense naturally before reaching the moment where a crucial new decision is needed.
 5. CHOICES: Generate 4 creative, tactical, distinctly different player choices for the next step. If loot was found, specify newItem or goldChange. If the player took damage, specify hpChange (negative number for damage scaled to difficulty, positive for healing). If a condition was applied or removed (e.g. spider venom causing Poisoned, or receiving a holy Blessing), specify addedStatusEffects or removedStatusEffectIds.
 6. COMBAT: When a fight begins, set "inCombat" to true and provide "combatEnemy" with full statistics (hp, maxHp, ac, attackBonus, damageNotation, xpValue). The game resolves the fight turn by turn using 5e rules - attack rolls, damage, death saving throws - so give the creature stats appropriate to its threat and to the party level, and describe it vividly rather than narrating the blow-by-blow yourself. Set "inCombat" false once no enemy is present.
-7. SCENE CONTINUITY & LOCATION PERSISTENCE:
+7. WORLD MEMORY: Return "worldUpdates" whenever the world changes.
+- quests: add a quest when the hero takes one on, and update it as they progress - mark objectives done, set status to "completed" or "failed". Use the SAME title each time so progress accumulates. Mark the campaign's central quest with isMain.
+- npcs: every named character the hero meets, with role, description, attitude (hostile/unfriendly/neutral/friendly/allied), where they are, and a short note about what just passed between them. Reuse the same name for a character already listed above and update their attitude as the relationship changes. Set isAlive false when one dies.
+- factions: groups whose opinion of the hero shifts, with reputationDelta (a small signed number, roughly -25 to +25) reflecting what the hero just did.
+Only include what actually changed this turn.
+8. SCENE CONTINUITY & LOCATION PERSISTENCE:
 - The hero is currently in: "${currentLocation?.name || 'Current Scene'}" (${currentLocation?.region || 'Current Region'}).
 - If the player's action takes place within the SAME environment, room, or building (e.g., browsing library shelves, speaking to a patron at the tavern bar, examining a chest, combat in the hallway), KEEP the location name, region, and atmosphere identical to "${currentLocation?.name || 'Current Scene'}", and set "isMajorSceneChange" to false.
 - ONLY change the location and set "isMajorSceneChange" to true when a BIG, DISTINCT SCENE CHANGE occurs (such as exiting the library and walking into the tavern, leaving the catacombs for the mountain pass, or journeying to an entirely new district or dungeon level).`;
@@ -472,6 +479,71 @@ CRITICAL STORYTELLING INSTRUCTIONS:
               required: ["id", "label"]
             },
             description: "Four distinct procedural choice buttons."
+          },
+          worldUpdates: {
+            type: Type.OBJECT,
+            description: "Changes to quests, characters and factions this turn. Omit anything unchanged.",
+            properties: {
+              quests: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING, description: "Reuse the exact title of an existing quest to update it." },
+                    summary: { type: Type.STRING },
+                    status: { type: Type.STRING, description: "active, completed or failed" },
+                    isMain: { type: Type.BOOLEAN },
+                    location: { type: Type.STRING },
+                    objectives: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          text: { type: Type.STRING },
+                          done: { type: Type.BOOLEAN }
+                        },
+                        required: ["text"]
+                      }
+                    }
+                  },
+                  required: ["title"]
+                }
+              },
+              npcs: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING, description: "Reuse the exact name of a character already met." },
+                    role: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    attitude: { type: Type.STRING, description: "hostile, unfriendly, neutral, friendly or allied" },
+                    location: { type: Type.STRING },
+                    faction: { type: Type.STRING },
+                    isAlive: { type: Type.BOOLEAN },
+                    portraitPrompt: { type: Type.STRING },
+                    notes: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: "One short line on what just happened between them and the hero."
+                    }
+                  },
+                  required: ["name"]
+                }
+              },
+              factions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    reputationDelta: { type: Type.INTEGER, description: "Signed change in standing, roughly -25 to +25." }
+                  },
+                  required: ["name"]
+                }
+              }
+            }
           },
           inCombat: {
             type: Type.BOOLEAN

@@ -205,6 +205,62 @@ export interface CombatLogEntry {
   critical?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Persistent world state the Dungeon Master reads back each turn
+// ---------------------------------------------------------------------------
+
+export type QuestStatus = 'active' | 'completed' | 'failed';
+
+export interface QuestObjective {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface Quest {
+  id: string;
+  title: string;
+  summary: string;
+  status: QuestStatus;
+  objectives: QuestObjective[];
+  /** The campaign's through-line, pinned above side quests. */
+  isMain?: boolean;
+  /** Where the lead points, if anywhere. */
+  location?: string;
+  updatedAtTurn?: number;
+}
+
+export type NpcAttitude = 'hostile' | 'unfriendly' | 'neutral' | 'friendly' | 'allied';
+
+export interface Npc {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  attitude: NpcAttitude;
+  location?: string;
+  faction?: string;
+  /** What happened between this character and the hero, newest last. */
+  notes: string[];
+  isAlive?: boolean;
+  portraitPrompt?: string;
+  lastSeenTurn?: number;
+}
+
+export interface Faction {
+  id: string;
+  name: string;
+  description: string;
+  /** -100 (sworn enemy) to +100 (champion). */
+  reputation: number;
+}
+
+export interface WorldState {
+  quests: Quest[];
+  npcs: Npc[];
+  factions: Faction[];
+}
+
 export interface CampaignState {
   campaignId: string;
   campaignTitle: string;
@@ -219,6 +275,8 @@ export interface CampaignState {
   turnCount: number;
   inCombat: boolean;
   combatEnemy?: CombatEnemy;
+  /** Quests, characters met and faction standing, remembered across turns. */
+  world?: WorldState;
   /** Turn-based combat bookkeeping while an encounter is running. */
   combat?: CombatState | null;
   createdAt?: number;

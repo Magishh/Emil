@@ -41,3 +41,21 @@ export const PortraitSprite: React.FC<{
     />
   );
 };
+
+/** Artwork for a location, generated on the same pipeline as items. */
+export const SceneryImage: React.FC<{
+  location: { name?: string; atmosphere?: string; sceneryPrompt?: string; sceneryImageUrl?: string };
+  className?: string;
+  alt?: string;
+}> = ({ location, className, alt }) => {
+  const { src, onError } = useSprite('scenery', location, location.sceneryImageUrl);
+  return (
+    <img
+      src={src}
+      onError={onError}
+      alt={alt ?? location.name ?? 'Location'}
+      referrerPolicy="no-referrer"
+      className={className}
+    />
+  );
+};

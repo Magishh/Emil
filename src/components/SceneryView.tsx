@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LocationInfo } from '../types';
-import { generateScenerySvg } from '../utils/svgArt';
+import { SceneryImage } from './Sprite';
 import { Sparkles, RefreshCw, Maximize2, ShieldAlert, Compass, Eye } from 'lucide-react';
 
 interface SceneryViewProps {
@@ -19,16 +19,6 @@ export const SceneryView: React.FC<SceneryViewProps> = ({
   onOpenPerchanceStudio,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [imgError, setImgError] = useState(false);
-
-  // Reset the image error flag whenever a new scenery image arrives, otherwise
-  // one failed load permanently pins the view to the fallback SVG.
-  useEffect(() => {
-    setImgError(false);
-  }, [location.sceneryImageUrl]);
-
-  const fallbackSvg = generateScenerySvg(location.sceneryPrompt || location.atmosphere, location.name);
-  const displayImage = (!imgError && location.sceneryImageUrl) ? location.sceneryImageUrl : fallbackSvg;
 
   const dangerColors: Record<string, string> = {
     Safe: 'bg-[#2e5a44] text-[#fdfaf1] border-[#2e5a44]',
@@ -106,12 +96,7 @@ export const SceneryView: React.FC<SceneryViewProps> = ({
 
       {/* Main Scenery Visual Canvas */}
       <div className="relative flex-1 min-h-[160px] md:min-h-[200px] bg-[#2c1810] overflow-hidden group">
-        <img
-          src={displayImage}
-          alt={location.name}
-          onError={() => setImgError(true)}
-          className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-        />
+        <SceneryImage location={location} className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105" />
 
         {/* Cinematic Vignette Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#2c1810]/90 via-transparent to-black/30 pointer-events-none" />
@@ -168,11 +153,7 @@ export const SceneryView: React.FC<SceneryViewProps> = ({
               </button>
             </div>
             <div className="relative h-[65vh] bg-[#2c1810] flex items-center justify-center">
-              <img
-                src={displayImage}
-                alt={location.name}
-                className="w-full h-full object-contain"
-              />
+              <SceneryImage location={location} className="w-full h-full object-contain" />
             </div>
           </div>
         </div>

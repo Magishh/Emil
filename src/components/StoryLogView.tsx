@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StoryLogEntry, LocationInfo } from '../types';
-import { generateScenerySvg } from '../utils/svgArt';
+import { SceneryImage } from './Sprite';
 import {
   BookOpen,
   Volume2,
@@ -58,15 +58,11 @@ export const StoryLogView: React.FC<StoryLogViewProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [fadeMode, setFadeMode] = useState<TextFadeMode>('visible');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [imgError, setImgError] = useState(false);
   const [narratorState, setNarratorState] = useState<NarratorPlaybackState>(narratorEngine.getState());
   const [narratorSettings, setNarratorSettings] = useState(narratorEngine.getSettings());
   const [showQuickVoiceMenu, setShowQuickVoiceMenu] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevStoryRef = useRef<string>(currentStory);
-
-  const fallbackSvg = generateScenerySvg(location.sceneryPrompt || location.atmosphere, location.name);
-  const displayImage = (!imgError && location.sceneryImageUrl) ? location.sceneryImageUrl : fallbackSvg;
 
   const dangerColors: Record<string, string> = {
     Safe: 'bg-emerald-800/80 text-emerald-100 border-emerald-600',
@@ -75,12 +71,6 @@ export const StoryLogView: React.FC<StoryLogViewProps> = ({
     High: 'bg-orange-900/80 text-orange-100 border-orange-600',
     Extreme: 'bg-red-950/90 text-red-100 border-red-700 animate-pulse',
   };
-
-  // Reset the image error flag whenever a new scenery image arrives, otherwise
-  // one failed load permanently pins the view to the fallback SVG.
-  useEffect(() => {
-    setImgError(false);
-  }, [location.sceneryImageUrl]);
 
   // Subscribe to Narrator playback updates
   useEffect(() => {
@@ -161,12 +151,7 @@ export const StoryLogView: React.FC<StoryLogViewProps> = ({
     >
       {/* 1. Full Crystal-Clear Scenery Artwork Background */}
       <div className="absolute inset-0 z-0 overflow-hidden bg-black">
-        <img
-          src={displayImage}
-          alt={location.name}
-          onError={() => setImgError(true)}
-          className="w-full h-full object-cover object-center transition-all duration-700 scale-100 filter brightness-100 contrast-105"
-        />
+        <SceneryImage location={location} className="w-full h-full object-cover object-center transition-all duration-700 scale-100 filter brightness-100 contrast-105" />
         {/* Very light subtle edge vignette purely to ensure top bar and bottom buttons have crisp separation */}
         <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/70 to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
@@ -554,9 +539,8 @@ export const StoryLogView: React.FC<StoryLogViewProps> = ({
             </button>
           </div>
           <div className="flex-1 flex items-center justify-center p-4">
-            <img
-              src={displayImage}
-              alt={location.name}
+            <SceneryImage
+              location={location}
               className="max-h-full max-w-full object-contain rounded-2xl shadow-2xl border-2 border-amber-500/40"
             />
           </div>
